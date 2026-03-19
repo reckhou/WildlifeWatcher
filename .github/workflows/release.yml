@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Restore
+        run: dotnet restore src/WildlifeWatcher/WildlifeWatcher.sln
+
+      - name: Publish (self-contained, single file)
+        run: >
+          dotnet publish src/WildlifeWatcher/WildlifeWatcher/WildlifeWatcher.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output ./publish
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Zip release
+        run: Compress-Archive -Path ./publish/* -DestinationPath ./WildlifeWatcher-${{ github.ref_name }}-win-x64.zip
+        shell: pwsh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Wildlife Watcher ${{ github.ref_name }}
+          files: WildlifeWatcher-${{ github.ref_name }}-win-x64.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

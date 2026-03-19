@@ -1,0 +1,31 @@
+# .NET build output
+bin/
+obj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+
+# EF Core design-time database
+wildlife_design.db
+
+# App data (credentials, logs, captures are local to each machine)
+%APPDATA%/WildlifeWatcher/
+
+# Claude Code local settings (personal overrides — not for team)
+.claude/settings.local.json
+
+# Sessions (conversation transcripts saved by hook)
+sessions/
+
+# OS
+Thumbs.db
+.DS_Store

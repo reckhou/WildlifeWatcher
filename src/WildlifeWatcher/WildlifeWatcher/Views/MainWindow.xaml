@@ -1,0 +1,67 @@
+﻿<Window x:Class="WildlifeWatcher.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:WildlifeWatcher.ViewModels"
+        mc:Ignorable="d"
+        Title="Wildlife Watcher" Height="700" Width="1100"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#CCDDCC"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2D4A2D"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="160"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left navigation rail -->
+        <StackPanel Grid.Column="0" Background="#1E2A1E" VerticalAlignment="Stretch">
+            <TextBlock Text="Wildlife Watcher" Foreground="White" FontSize="13" FontWeight="Bold"
+                       Margin="16,24,16,32" TextWrapping="Wrap" HorizontalAlignment="Center"
+                       TextAlignment="Center"/>
+            <Button Content="Live View"
+                    Command="{Binding NavigateToCommand}"
+                    CommandParameter="{x:Static vm:AppPage.LiveView}"
+                    Style="{StaticResource NavButtonStyle}"/>
+            <Button Content="Gallery"
+                    Command="{Binding NavigateToCommand}"
+                    CommandParameter="{x:Static vm:AppPage.Gallery}"
+                    Style="{StaticResource NavButtonStyle}"/>
+            <Button Content="Settings"
+                    Command="{Binding NavigateToCommand}"
+                    CommandParameter="{x:Static vm:AppPage.Settings}"
+                    Style="{StaticResource NavButtonStyle}"/>
+        </StackPanel>
+
+        <!-- Main content area — placeholder until Phase 2 -->
+        <Border Grid.Column="1" Background="#F5F5F0">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Wildlife Watcher" FontSize="28" FontWeight="Bold"
+                           Foreground="#2D5A27" HorizontalAlignment="Center"/>
+                <TextBlock Text="Phase 1 scaffolding complete." FontSize="14"
+                           Foreground="#666" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                <TextBlock Text="{Binding StatusText}" FontSize="12"
+                           Foreground="#888" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+
+</Window>
