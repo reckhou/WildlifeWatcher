@@ -34,6 +34,16 @@
                     <TextBlock x:Name="AlternativesTextBlock"
                                FontSize="11" Foreground="#888" Margin="0,0,0,4"
                                TextWrapping="Wrap"/>
+                    <!-- Weather row (shown when weather was recorded) -->
+                    <StackPanel x:Name="WeatherPanel" Orientation="Horizontal"
+                                Margin="0,6,0,0" Visibility="Collapsed">
+                        <TextBlock x:Name="WeatherTextBlock" FontSize="11" Foreground="#555"/>
+                    </StackPanel>
+                    <!-- Sunrise/Sunset row -->
+                    <StackPanel x:Name="SunrisePanel" Orientation="Horizontal"
+                                Margin="0,2,0,4" Visibility="Collapsed">
+                        <TextBlock x:Name="SunriseTextBlock" FontSize="11" Foreground="#666"/>
+                    </StackPanel>
                     <TextBox x:Name="NotesBox"
                              AcceptsReturn="True" TextWrapping="Wrap"
                              Height="48" Padding="6,4" FontSize="12"

@@ -9,8 +9,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>WildlifeWatcher</AssemblyName>
     <RootNamespace>WildlifeWatcher</RootNamespace>
-    <Version>1.3.1</Version>
+    <Version>1.4.0</Version>
+    <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!-- Embed AppIcon.ico as a WPF resource so Window.Icon can reference it via pack URI -->
+  <ItemGroup>
+    <Resource Include="Resources\AppIcon.ico"/>
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Infrastructure -->

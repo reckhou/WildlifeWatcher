@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,6 +70,29 @@ public partial class App : Application
                 // Capture storage (Phase 4)
                 services.AddSingleton<ICaptureStorageService, CaptureStorageService>();
 
+                // Bird photo service (legacy singleton HttpClient — kept for BirdPhotoService)
+                services.AddSingleton<HttpClient>();
+                services.AddSingleton<IBirdPhotoService, BirdPhotoService>();
+
+                // Named HTTP clients (Phase 6 — weather/geocoding; Phase 7 — update check)
+                services.AddHttpClient("nominatim", c => {
+                    c.BaseAddress = new Uri("https://nominatim.openstreetmap.org/");
+                    c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0");
+                });
+                services.AddHttpClient("openmeteo", c =>
+                    c.BaseAddress = new Uri("https://api.open-meteo.com/"));
+                services.AddHttpClient("github", c => {
+                    c.BaseAddress = new Uri("https://api.github.com/");
+                    c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher");
+                });
+
+                // Weather & geocoding (Phase 6)
+                services.AddSingleton<IGeocodingService, NominatimGeocodingService>();
+                services.AddSingleton<IWeatherService, OpenMeteoWeatherService>();
+
+                // Auto-update (Phase 7)
+                services.AddSingleton<IUpdateService, UpdateService>();
+
                 // ViewModels
                 services.AddSingleton<MainViewModel>();
                 services.AddSingleton<LiveViewModel>();
@@ -91,6 +115,10 @@ public partial class App : Application
         var factory = _host.Services.GetRequiredService<IDbContextFactory<WildlifeDbContext>>();
         using var db = factory.CreateDbContext();
         db.Database.Migrate();
+
+        // Merge any duplicate species that share the same ScientificName
+        var captureStorage = _host.Services.GetRequiredService<ICaptureStorageService>();
+        captureStorage.MergeSpeciesByScientificNameAsync().GetAwaiter().GetResult();
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();

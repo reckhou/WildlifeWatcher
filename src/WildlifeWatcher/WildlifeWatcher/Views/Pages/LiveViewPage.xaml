@@ -165,11 +165,6 @@
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="{Binding StatusText}"
                                        Foreground="#CCDDCC" FontSize="12"/>
-                            <TextBlock Text="{Binding ModelDataAgeText}"
-                                       Foreground="#557755" FontSize="11"
-                                       Margin="12,0,0,0" VerticalAlignment="Center"
-                                       Visibility="{Binding ModelDataAgeText,
-                                                    Converter={StaticResource NullOrEmptyToCollapsedConverter}}"/>
                         </StackPanel>
 
                         <!-- Volume control -->

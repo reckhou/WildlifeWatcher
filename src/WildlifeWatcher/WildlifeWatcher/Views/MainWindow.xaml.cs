@@ -19,6 +19,14 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
 
+        // Set window icon from embedded resource (avoids WPF pack-URI case-sensitivity crash)
+        try
+        {
+            var iconUri = new Uri("pack://application:,,,/Resources/AppIcon.ico");
+            Icon = System.Windows.Media.Imaging.BitmapFrame.Create(iconUri);
+        }
+        catch { /* non-fatal — app still runs without custom icon */ }
+
         _liveViewPage = liveViewPage;
         _settingsPage = settingsPage;
         _galleryPage  = galleryPage;

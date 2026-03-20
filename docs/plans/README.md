@@ -9,7 +9,8 @@
 | 3 | [phase-3-ai-recognition.md](phase-3-ai-recognition.md) | `v0.3.0` | 📋 Planned |
 | 4 | [phase-4-capture-storage.md](phase-4-capture-storage.md) | `v0.4.0` | 📋 Planned |
 | 5 | [phase-5-gallery.md](phase-5-gallery.md) | `v0.5.0` | 📋 Planned |
-| 6 | [phase-6-weather-calendar.md](phase-6-weather-calendar.md) | `v0.6.0` | 📋 Planned |
+| 6 | [phase-6-weather-calendar.md](phase-6-weather-calendar.md) | `v1.4.0` | 📋 Planned |
+| 7 | [phase-7-auto-update.md](phase-7-auto-update.md) | `v1.5.0` | 📋 Planned |
 
 ## Feature Summary
 
@@ -31,6 +32,8 @@
 | Home location setup (city/postcode via Nominatim) | 6 |
 | Weather data paired with captures (Open-Meteo) | 6 |
 | Calendar heat-map view (captures by date) | 6 |
+| Auto-update check on startup (GitHub Releases) | 7 |
+| Update notification banner + one-click apply | 7 |
 
 ## Key Technology Decisions
 

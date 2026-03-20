@@ -16,6 +16,7 @@ public class WildlifeDbContext(DbContextOptions<WildlifeDbContext> options) : Db
             e.HasKey(s => s.Id);
             e.Property(s => s.CommonName).IsRequired().HasMaxLength(200);
             e.Property(s => s.ScientificName).HasMaxLength(200);
+            e.Property(s => s.ReferencePhotoPath).HasMaxLength(500);
             e.HasIndex(s => s.CommonName);
         });
 

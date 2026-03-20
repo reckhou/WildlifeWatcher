@@ -1,6 +1,6 @@
 # Phase 7 — Auto-Update
 
-**Version:** `v0.6.0` → `v0.7.0`
+**Version:** `v1.4.0` → `v1.5.0`
 
 ## Context
 WildlifeWatcher is distributed as a self-contained single-file executable via GitHub Releases (tag `v*.*.*` on `reckhou/WildlifeWatcher`). Users currently have no way to know a newer version exists. This phase adds an auto-update mechanism that checks GitHub Releases on startup, notifies the user via a banner, and applies the update via a PowerShell helper script (since a running Windows executable cannot overwrite itself).
@@ -9,21 +9,7 @@ WildlifeWatcher is distributed as a self-contained single-file executable via Gi
 
 ## Implementation
 
-### 1. Embed version in the assembly
-**File:** `src/WildlifeWatcher/WildlifeWatcher/WildlifeWatcher.csproj`
-
-Add `<Version>0.1.0</Version>` inside the existing `<PropertyGroup>`. Accessible at runtime via `Assembly.GetExecutingAssembly().GetName().Version`.
-
-### 2. Stamp version during CI release build
-**File:** `.github/workflows/release.yml`
-
-Add `-p:Version=$VERSION` to the `dotnet publish` command so the published binary's assembly version matches the git tag.
-
-```yaml
-dotnet publish ... -p:Version=${{ env.VERSION }}
-```
-
-### 3. Create UpdateInfo model
+### 1. Create UpdateInfo model
 **File:** `src/WildlifeWatcher/WildlifeWatcher/Models/UpdateInfo.cs`
 
 ```csharp
@@ -38,7 +24,7 @@ public class UpdateInfo
 }
 ```
 
-### 4. Create IUpdateService
+### 2. Create IUpdateService
 **File:** `src/WildlifeWatcher/WildlifeWatcher/Services/Interfaces/IUpdateService.cs`
 
 ```csharp
@@ -49,13 +35,14 @@ public interface IUpdateService
 }
 ```
 
-### 5. Create UpdateService
+### 3. Create UpdateService
 **File:** `src/WildlifeWatcher/WildlifeWatcher/Services/UpdateService.cs`
 
 **CheckForUpdateAsync:**
 - GET `https://api.github.com/repos/reckhou/WildlifeWatcher/releases/latest` (`User-Agent: WildlifeWatcher`)
 - Parse `tag_name` (strip `v`) → `Version`, find `.zip` asset `browser_download_url`
 - Compare with `Assembly.GetExecutingAssembly().GetName().Version`
+- If `AppConfiguration.DebugForceUpdateAvailable` is `true`, skip the real check and return a fake `UpdateInfo` with `LatestVersion = new Version(99, 0, 0)`
 - Return `UpdateInfo` or `null` on any error
 
 **ApplyUpdateAsync:**
@@ -72,23 +59,33 @@ public interface IUpdateService
 
 No extra NuGet packages — uses `System.Net.Http.HttpClient` and `System.IO.Compression.ZipFile`.
 
-### 6. Register in DI
+### 4. Register in DI
 **File:** `src/WildlifeWatcher/WildlifeWatcher/App.xaml.cs`
 
 ```csharp
 services.AddSingleton<IUpdateService, UpdateService>();
 ```
 
-### 7. MainViewModel additions
+### 5. MainViewModel additions
 **File:** `src/WildlifeWatcher/WildlifeWatcher/ViewModels/MainViewModel.cs`
 
 - Inject `IUpdateService`
 - Observable properties: `bool IsUpdateAvailable`, `string UpdateBannerText` (e.g. "v1.2.0 available"), `bool IsUpdating`, `int UpdateProgress`
+- `string WindowTitle` property:
+  ```csharp
+  public string WindowTitle =>
+      $"WildlifeWatcher v{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)}";
+  ```
 - `IAsyncRelayCommand CheckForUpdateCommand` — fire-and-forget on startup
 - `IAsyncRelayCommand ApplyUpdateCommand` — download + apply
 
-### 8. Update banner UI
+### 6. Update banner UI + window title
 **File:** `src/WildlifeWatcher/WildlifeWatcher/Views/MainWindow.xaml`
+
+Bind window title to `WindowTitle`:
+```xml
+<Window ... Title="{Binding WindowTitle}">
+```
 
 Thin banner at top of window, visible only when `IsUpdateAvailable`:
 
@@ -106,6 +103,15 @@ Thin banner at top of window, visible only when `IsUpdateAvailable`:
 </Border>
 ```
 
+### App icon
+**File:** `src/WildlifeWatcher/WildlifeWatcher/Resources/AppIcon.ico`
+
+Generate a wildlife/camera-themed icon (e.g. camera lens with a bird silhouette, or binoculars) with embedded sizes: 16, 32, 48, 256 px.
+
+Wire it up:
+- `WildlifeWatcher.csproj`: add `<ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>` inside the existing `<PropertyGroup>`
+- `Views/MainWindow.xaml`: add `Icon="Resources/AppIcon.ico"` to the `<Window>` element
+
 ---
 
 ## Files Summary
@@ -113,19 +119,21 @@ Thin banner at top of window, visible only when `IsUpdateAvailable`:
 | File | Action |
 |------|--------|
 | `Models/UpdateInfo.cs` | New |
+| `Models/AppConfiguration.cs` | Add `bool DebugForceUpdateAvailable` (debug option, default `false`) |
 | `Services/Interfaces/IUpdateService.cs` | New |
 | `Services/UpdateService.cs` | New |
-| `WildlifeWatcher.csproj` | Add `<Version>0.1.0</Version>` |
-| `.github/workflows/release.yml` | Pass `-p:Version=` to dotnet publish |
 | `App.xaml.cs` | Register `IUpdateService` |
-| `ViewModels/MainViewModel.cs` | Inject service, add properties + commands |
-| `Views/MainWindow.xaml` | Add update banner |
+| `ViewModels/MainViewModel.cs` | Inject service; add `WindowTitle`, update properties + commands |
+| `Views/MainWindow.xaml` | Bind `Title`; add update banner |
+| `Resources/AppIcon.ico` | New — wildlife/camera themed icon (16/32/48/256 px) |
+| `WildlifeWatcher.csproj` | Set `<ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>` |
 
 ---
 
 ## Verification
 1. Build — confirm no errors.
-2. Temporarily force `CurrentVersion = 0.0.1` in `UpdateService` and call `CheckForUpdateAsync` — should return `IsUpdateAvailable = true`.
-3. Confirm banner appears in UI (set via debug/breakpoint).
+2. **Debug testing:** Set `DebugForceUpdateAvailable = true` in `AppConfiguration` (or in Settings if exposed) → launch app → update banner should appear immediately without hitting GitHub API. Reset to `false` when done.
+3. Confirm banner appears in UI with correct version text.
 4. Inspect generated `.ps1` in `%TEMP%` for correct source/dest paths.
-5. End-to-end: tag a release, let CI build, install, then release a newer tag — running app detects and applies update.
+5. Confirm window title shows current assembly version (e.g. "WildlifeWatcher v1.5.0").
+6. Push a `v1.5.0` tag → confirm CI release workflow produces a `.exe` with `FileVersion = 1.5.0`.

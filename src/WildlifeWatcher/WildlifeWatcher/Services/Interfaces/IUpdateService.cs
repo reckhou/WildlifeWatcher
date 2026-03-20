@@ -1,0 +1,9 @@
+using WildlifeWatcher.Models;
+
+namespace WildlifeWatcher.Services.Interfaces;
+
+public interface IUpdateService
+{
+    Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default);
+    Task ApplyUpdateAsync(UpdateInfo update, IProgress<int> progress, CancellationToken ct = default);
+}

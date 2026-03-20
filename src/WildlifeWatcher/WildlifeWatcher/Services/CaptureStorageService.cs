@@ -14,7 +14,8 @@ namespace WildlifeWatcher.Services;
 public class CaptureStorageService : ICaptureStorageService
 {
     private readonly IDbContextFactory<WildlifeDbContext> _dbFactory;
-    private readonly ISettingsService _settings;
+    private readonly ISettingsService    _settings;
+    private readonly IWeatherService     _weather;
     private readonly ILogger<CaptureStorageService> _logger;
 
     public event EventHandler<CaptureRecord>? CaptureSaved;
@@ -22,15 +23,47 @@ public class CaptureStorageService : ICaptureStorageService
     public CaptureStorageService(
         IDbContextFactory<WildlifeDbContext> dbFactory,
         ISettingsService settings,
+        IWeatherService  weather,
         ILogger<CaptureStorageService> logger)
     {
         _dbFactory = dbFactory;
         _settings  = settings;
+        _weather   = weather;
         _logger    = logger;
     }
 
-    public async Task SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null)
+    public async Task SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null, DateTime? batchStartedAt = null)
     {
+        // Per-species cooldown: skip saving if this species was captured before this batch started.
+        // Captures made within the same batch (batchStartedAt) are excluded from the check so that
+        // multiple individuals of the same species returned by one AI query are all recorded.
+        var cooldownMinutes = _settings.CurrentSettings.SpeciesCooldownMinutes;
+        if (cooldownMinutes > 0)
+        {
+            var batchCutoff = batchStartedAt ?? DateTime.Now;
+            await using var checkDb = await _dbFactory.CreateDbContextAsync();
+            var latestCapture = await checkDb.CaptureRecords
+                .Where(c =>
+                    c.CapturedAt < batchCutoff &&
+                    (c.Species.CommonName.ToLower() == result.CommonName.ToLower() ||
+                     (!string.IsNullOrEmpty(result.ScientificName) &&
+                      c.Species.ScientificName.ToLower() == result.ScientificName.ToLower())))
+                .OrderByDescending(c => c.CapturedAt)
+                .Select(c => (DateTime?)c.CapturedAt)
+                .FirstOrDefaultAsync();
+
+            if (latestCapture.HasValue &&
+                batchCutoff - latestCapture.Value < TimeSpan.FromMinutes(cooldownMinutes))
+            {
+                _logger.LogInformation(
+                    "Species cooldown: {Species} was saved {Ago:F1} min ago (cooldown {Limit} min) — skipping",
+                    result.CommonName,
+                    (batchCutoff - latestCapture.Value).TotalMinutes,
+                    cooldownMinutes);
+                return;
+            }
+        }
+
         var captureDir = ResolveCapturesDir(_settings.CurrentSettings.CapturesDirectory);
         var safeName   = string.Concat(result.CommonName.Split(Path.GetInvalidFileNameChars()))
                                .Replace(' ', '_');
@@ -51,23 +84,30 @@ public class CaptureStorageService : ICaptureStorageService
             await File.WriteAllBytesAsync(annotatedPath, annotatedBytes);
             _logger.LogInformation("Annotated capture saved: {Path}", annotatedPath);
 
-            foreach (var poi in poiRegions)
+            if (_settings.CurrentSettings.SavePoiDebugImages)
             {
-                bool isSource = result.SourcePoiIndex == null || poi.Index == result.SourcePoiIndex;
-                var cropLabel = isSource
-                    ? speciesLabel
-                    : $"POI {poi.Index} — Sent to AI (not matched)";
-                var cropBytes = await LabelCropJpeg(poi.CroppedJpeg, cropLabel);
-                var cropPath  = Path.Combine(captureDir, $"{baseName}_poi_{poi.Index}.jpg");
-                await File.WriteAllBytesAsync(cropPath, cropBytes);
+                foreach (var poi in poiRegions)
+                {
+                    bool isSource = result.SourcePoiIndex == null || poi.Index == result.SourcePoiIndex;
+                    var cropLabel = isSource
+                        ? speciesLabel
+                        : $"POI {poi.Index} — Sent to AI (not matched)";
+                    var cropBytes = await LabelCropJpeg(poi.CroppedJpeg, cropLabel);
+                    var cropPath  = Path.Combine(captureDir, $"{baseName}_poi_{poi.Index}.jpg");
+                    await File.WriteAllBytesAsync(cropPath, cropBytes);
+                }
+                _logger.LogInformation("Saved {Count} labeled POI crop(s) for {Base}", poiRegions.Count, baseName);
             }
-            _logger.LogInformation("Saved {Count} labeled POI crop(s) for {Base}", poiRegions.Count, baseName);
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync();
 
         var species = await db.Species
             .FirstOrDefaultAsync(s => s.CommonName.ToLower() == result.CommonName.ToLower());
+
+        if (species == null && !string.IsNullOrEmpty(result.ScientificName))
+            species = await db.Species
+                .FirstOrDefaultAsync(s => s.ScientificName.ToLower() == result.ScientificName.ToLower());
 
         if (species == null)
         {
@@ -82,6 +122,14 @@ public class CaptureStorageService : ICaptureStorageService
             await db.SaveChangesAsync();
         }
 
+        // Fetch weather if location is configured
+        var cfg = _settings.CurrentSettings;
+        WeatherSnapshot? weather = null;
+        if (cfg.Latitude.HasValue && cfg.Longitude.HasValue)
+        {
+            weather = await _weather.GetCurrentWeatherAsync(cfg.Latitude.Value, cfg.Longitude.Value);
+        }
+
         var record = new CaptureRecord
         {
             SpeciesId              = species.Id,
@@ -92,7 +140,13 @@ public class CaptureStorageService : ICaptureStorageService
             AnnotatedImageFilePath = annotatedPath,
             AlternativesJson       = result.Candidates.Count > 1
                 ? JsonSerializer.Serialize(result.Candidates.Skip(1))
-                : null
+                : null,
+            Temperature      = weather?.Temperature,
+            WeatherCondition = weather?.Condition,
+            WindSpeed        = weather?.WindSpeed,
+            Precipitation    = weather?.Precipitation,
+            Sunrise          = weather?.Sunrise,
+            Sunset           = weather?.Sunset,
         };
         db.CaptureRecords.Add(record);
         await db.SaveChangesAsync();
@@ -119,7 +173,6 @@ public class CaptureStorageService : ICaptureStorageService
         return await db.Species
             .Include(s => s.Captures)
             .Where(s => s.Captures.Any())
-            .OrderBy(s => s.CommonName)
             .ToListAsync();
     }
 
@@ -158,6 +211,79 @@ public class CaptureStorageService : ICaptureStorageService
         if (record == null) return;
         record.Notes = notes;
         await db.SaveChangesAsync();
+    }
+
+    public async Task UpdateSpeciesReferencePhotoAsync(int speciesId, string localPath)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var species = await db.Species.FindAsync(speciesId);
+        if (species == null) return;
+        species.ReferencePhotoPath = localPath;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task MergeSpeciesByScientificNameAsync()
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var allSpecies = await db.Species.ToListAsync();
+
+        var groups = allSpecies
+            .Where(s => !string.IsNullOrWhiteSpace(s.ScientificName))
+            .GroupBy(s => s.ScientificName.ToLower())
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        foreach (var group in groups)
+        {
+            var canonical   = group.OrderBy(s => s.FirstDetectedAt).First();
+            var duplicates  = group.Where(s => s.Id != canonical.Id).ToList();
+            var duplicateIds = duplicates.Select(s => s.Id).ToList();
+
+            await db.CaptureRecords
+                .Where(c => duplicateIds.Contains(c.SpeciesId))
+                .ExecuteUpdateAsync(x => x.SetProperty(c => c.SpeciesId, canonical.Id));
+
+            var earliestDate = group.Min(s => s.FirstDetectedAt);
+            if (canonical.FirstDetectedAt > earliestDate)
+            {
+                canonical.FirstDetectedAt = earliestDate;
+                db.Species.Update(canonical);
+            }
+
+            db.Species.RemoveRange(duplicates);
+            await db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Merged {Count} duplicate(s) of '{Name}' (ScientificName: {Sci}) into species id={Id}",
+                duplicates.Count, canonical.CommonName, canonical.ScientificName, canonical.Id);
+        }
+    }
+
+    public async Task<Dictionary<DateTime, int>> GetCaptureDateCountsForMonthAsync(int year, int month)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var start = new DateTime(year, month, 1);
+        var end   = start.AddMonths(1);
+
+        var dates = await db.CaptureRecords
+            .Where(c => c.CapturedAt >= start && c.CapturedAt < end)
+            .Select(c => c.CapturedAt.Date)
+            .ToListAsync();
+
+        return dates.GroupBy(d => d).ToDictionary(g => g.Key, g => g.Count());
+    }
+
+    public async Task<IReadOnlyList<CaptureRecord>> GetCapturesByDateAsync(DateTime date)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var start = date.Date;
+        var end   = start.AddDays(1);
+
+        return await db.CaptureRecords
+            .Include(c => c.Species)
+            .Where(c => c.CapturedAt >= start && c.CapturedAt < end)
+            .OrderBy(c => c.CapturedAt)
+            .ToListAsync();
     }
 
     private static async Task<byte[]> DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)

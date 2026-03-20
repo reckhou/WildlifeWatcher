@@ -25,6 +25,23 @@ public partial class CaptureDetailDialog : Window
         ConfidenceTextBlock.Text = $"Confidence: {record.ConfidenceScore:P0}";
         NotesBox.Text            = record.Notes ?? string.Empty;
 
+        // Weather
+        if (!string.IsNullOrEmpty(record.WeatherCondition))
+        {
+            WeatherPanel.Visibility = Visibility.Visible;
+            var w = record.WeatherCondition;
+            if (record.Temperature.HasValue)  w += $" • {record.Temperature:F1}°C";
+            if (record.WindSpeed.HasValue)    w += $" • {record.WindSpeed:F0} km/h wind";
+            if (record.Precipitation.HasValue) w += $" • {record.Precipitation:F1}mm rain";
+            WeatherTextBlock.Text = w;
+        }
+
+        if (record.Sunrise.HasValue)
+        {
+            SunrisePanel.Visibility = Visibility.Visible;
+            SunriseTextBlock.Text   = $"Sunrise: {record.Sunrise:HH:mm}   Sunset: {record.Sunset:HH:mm}";
+        }
+
         // Alternatives text
         if (!string.IsNullOrEmpty(record.AlternativesJson))
         {

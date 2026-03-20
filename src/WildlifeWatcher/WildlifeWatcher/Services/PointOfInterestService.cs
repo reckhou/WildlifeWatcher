@@ -20,8 +20,6 @@ public class PointOfInterestService : IPointOfInterestService
     private const int ScaleWidth  = GridCols * 5; // 160
     private const int ScaleHeight = GridRows * 5; // 120
 
-    private const double CellHotFraction  = 0.12; // fraction of cell pixels that must be foreground (3/25 px — was 0.06)
-    private const int    MinCellCount     = 2;    // minimum hot cells to form a region (was 1)
     private const double PadFraction      = 0.40; // padding added around tight bounding box
     private const double MaxBlobFraction  = 0.20; // skip tight bbox larger than 20% of frame in either dimension
     private const double MaxCropFraction  = 0.25; // clamp padded crop to 25% of frame in either dimension
@@ -30,8 +28,14 @@ public class PointOfInterestService : IPointOfInterestService
 
     public IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame,
                                                      IReadOnlyList<MotionZone>? whitelistZones = null,
-                                                     int pixelThreshold = 25)
+                                                     int pixelThreshold = 25,
+                                                     double poiSensitivity = 0.5)
     {
+        // ── 0. Derive POI parameters from sensitivity ───────────────────────
+        double cellHotFraction = 0.16 - 0.12 * poiSensitivity;       // 0.16 → 0.04
+        int    minCellCount    = poiSensitivity >= 0.8 ? 1 : poiSensitivity >= 0.4 ? 2 : 3;
+        bool   use8Neighbor    = poiSensitivity >= 0.3;
+
         // ── 1. Build hot-cell grid ──────────────────────────────────────────
         var hotCells = new bool[GridRows, GridCols];
         const int cellPixels = 5 * 5;
@@ -46,7 +50,7 @@ public class PointOfInterestService : IPointOfInterestService
                     int idx = (row * 5 + py) * ScaleWidth + (col * 5 + px);
                     if (foreground[idx] > pixelThreshold) changed++;
                 }
-                hotCells[row, col] = changed >= cellPixels * CellHotFraction;
+                hotCells[row, col] = changed >= cellPixels * cellHotFraction;
             }
         }
 
@@ -84,7 +88,7 @@ public class PointOfInterestService : IPointOfInterestService
             {
                 var (cr, cc) = queue.Dequeue();
                 component.Add((cr, cc));
-                foreach (var (nr, nc) in Neighbors(cr, cc))
+                foreach (var (nr, nc) in (use8Neighbor ? Neighbors8(cr, cc) : Neighbors4(cr, cc)))
                 {
                     if (!visited[nr, nc] && hotCells[nr, nc])
                     {
@@ -94,7 +98,7 @@ public class PointOfInterestService : IPointOfInterestService
                 }
             }
 
-            if (component.Count >= MinCellCount)
+            if (component.Count >= minCellCount)
                 components.Add(component);
         }
 
@@ -201,11 +205,23 @@ public class PointOfInterestService : IPointOfInterestService
         return ms.ToArray();
     }
 
-    private static IEnumerable<(int r, int c)> Neighbors(int r, int c)
+    private static IEnumerable<(int r, int c)> Neighbors4(int r, int c)
     {
         if (r > 0)            yield return (r - 1, c);
         if (r < GridRows - 1) yield return (r + 1, c);
         if (c > 0)            yield return (r, c - 1);
         if (c < GridCols - 1) yield return (r, c + 1);
+    }
+
+    private static IEnumerable<(int r, int c)> Neighbors8(int r, int c)
+    {
+        for (int dr = -1; dr <= 1; dr++)
+        for (int dc = -1; dc <= 1; dc++)
+        {
+            if (dr == 0 && dc == 0) continue;
+            int nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < GridRows && nc >= 0 && nc < GridCols)
+                yield return (nr, nc);
+        }
     }
 }

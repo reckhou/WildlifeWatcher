@@ -1,6 +1,6 @@
 # Phase 6 — Weather Data + Calendar View
 
-**Version:** `v0.5.0` → `v0.6.0`
+**Version:** `v1.3.x` → `v1.4.0`
 
 ## Context
 Adds two features: (1) weather data fetched at capture time and stored with each capture record, and (2) a calendar heat-map view inside the Gallery page. Location is configured in Settings via city/postcode search (Nominatim, free, no API key, international). Weather from Open-Meteo (free, no API key).
@@ -24,7 +24,7 @@ Adds two features: (1) weather data fetched at capture time and stored with each
 | `Services/NominatimGeocodingService.cs` | Nominatim HTTP implementation |
 | `Services/OpenMeteoWeatherService.cs` | Open-Meteo HTTP impl + WMO code mapping |
 | `ViewModels/CalendarDayViewModel.cs` | Per-cell data: date, count, heat color, IsToday, IsBlank |
-| `Converters/NullToCollapsedConverter.cs` | `null` → `Collapsed` |
+| `Converters/NullToCollapsedConverter.cs` | `null` → `Collapsed` (struct/nullable value types only; string null checks reuse existing `NullOrEmptyToCollapsedConverter`) |
 | `Converters/ZeroToCollapsedConverter.cs` | `int` 0 → `Collapsed` |
 | `Converters/ZeroToEmptyStringConverter.cs` | `int` 0 → `""` (hides day number in blank cells) |
 | EF migration `AddWeatherFields` | Auto-generated: `dotnet ef migrations add AddWeatherFields` |
@@ -41,9 +41,9 @@ Adds two features: (1) weather data fetched at capture time and stored with each
 | `Views/Pages/GalleryPage.xaml` | Toggle bar + calendar panel |
 | `Views/Pages/SettingsPage.xaml` | Location search section |
 | `Views/Dialogs/CaptureDetailDialog.xaml` | Weather display rows |
-| `App.xaml.cs` | `AddDbContextFactory`; named HTTP clients; new service registrations |
-| `App.xaml` | Register 3 new converters |
-| `WildlifeWatcher.csproj` | Add `Microsoft.Extensions.Http` if not pulled transitively |
+| `App.xaml.cs` | Named HTTP clients; new service registrations |
+| `App.xaml` | Register `NullToCollapsedConverter` (new); `NullOrEmptyToCollapsedConverter` (existing) handles string null checks |
+| `WildlifeWatcher.csproj` | Add `Microsoft.Extensions.Http` only if build fails without it (likely already pulled transitively via `Microsoft.Extensions.Hosting`) |
 
 ---
 
@@ -102,6 +102,7 @@ All fields nullable → no `DEFAULT` needed. Applied automatically at startup.
 - Return `null` on any exception (capture still saved without weather)
 
 ### `App.xaml.cs` changes
+`AddDbContextFactory` is already in use — do **not** re-apply it. Only add the named HTTP clients and service registrations below:
 ```csharp
 // Named HTTP clients
 services.AddHttpClient("nominatim", c => {
@@ -187,7 +188,7 @@ ItemsControl {LocationResults} (ZeroToCollapsed on .Count):
     TextBlock {DisplayName}
     MouseBinding → SelectLocationCommand param={Binding}
 
-TextBlock "Current: {LocationName}" (NullToCollapsed on LocationName)
+TextBlock "Current: {LocationName}" (NullOrEmptyToCollapsed on LocationName — reuses existing converter)
 ```
 
 ### `GalleryPage.xaml` — Calendar additions
@@ -224,15 +225,15 @@ DockPanel:
 
 ### `CaptureDetailDialog.xaml` — weather rows
 ```xml
-<!-- Collapsed when WeatherCondition is null -->
+<!-- Collapsed when WeatherCondition is null/empty — uses existing NullOrEmptyToCollapsedConverter (string) -->
 <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-    Visibility="{Binding WeatherCondition, Converter={StaticResource NullToCollapsedConverter}}">
+    Visibility="{Binding WeatherCondition, Converter={StaticResource NullOrEmptyToCollapsedConverter}}">
   <TextBlock Text="{Binding WeatherCondition}"/>
   <TextBlock Text="{Binding Temperature, StringFormat=' • {0:F1}°C'}"/>
   <TextBlock Text="{Binding WindSpeed, StringFormat=' • {0:F0} km/h wind'}"/>
   <TextBlock Text="{Binding Precipitation, StringFormat=' • {0:F1}mm rain'}"/>
 </StackPanel>
-<!-- Collapsed when Sunrise is null -->
+<!-- Collapsed when Sunrise is null — uses new NullToCollapsedConverter (DateTime? nullable struct) -->
 <StackPanel Orientation="Horizontal" Margin="0,2,0,0"
     Visibility="{Binding Sunrise, Converter={StaticResource NullToCollapsedConverter}}">
   <TextBlock Text="{Binding Sunrise, StringFormat='Sunrise: {0:HH:mm}'}"/>

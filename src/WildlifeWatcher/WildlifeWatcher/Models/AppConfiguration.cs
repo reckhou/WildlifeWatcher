@@ -13,6 +13,13 @@ public class AppConfiguration
     /// Prevents repeated alerts for the same animal still in frame.
     /// </summary>
     public int CooldownSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Per-species save cooldown in minutes. If the same species was already saved within this window,
+    /// the new capture is discarded (file is not written, no DB record is created).
+    /// Set to 0 to disable. Default: 5 minutes.
+    /// </summary>
+    public int SpeciesCooldownMinutes { get; set; } = 5;
     public string CapturesDirectory { get; set; } = "captures";
     public string ClaudeModel { get; set; } = "claude-haiku-4-5-20251001";
     public string GeminiModel { get; set; } = "gemini-2.0-flash";
@@ -29,6 +36,12 @@ public class AppConfiguration
     public bool EnablePoiExtraction { get; set; } = true;
     public bool SavePoiDebugImages { get; set; } = true;
 
+    /// <summary>
+    /// Controls how aggressively POI extraction isolates small regions.
+    /// 0.0 = conservative (large subjects only), 1.0 = aggressive (small/distant subjects).
+    /// </summary>
+    public double PoiSensitivity { get; set; } = 0.5;
+
     /// <summary>EMA update rate for background model. Lower = background adapts more slowly = better small-subject retention. Range: 0.01–0.20.</summary>
     public double MotionBackgroundAlpha { get; set; } = 0.05;
 
@@ -42,6 +55,17 @@ public class AppConfiguration
     public List<MotionZone> MotionWhitelistZones { get; set; } = new();
 
     public string DatabasePath { get; set; } = string.Empty;
+
+    // Location for weather data (Phase 6)
+    public double? Latitude     { get; set; }
+    public double? Longitude    { get; set; }
+    public string  LocationName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Debug option: forces the update check to return a fake available update without hitting GitHub.
+    /// Set to true temporarily to test the update banner at runtime. Default: false.
+    /// </summary>
+    public bool DebugForceUpdateAvailable { get; set; } = false;
 
     public string GetEffectiveDatabasePath() =>
         string.IsNullOrWhiteSpace(DatabasePath)

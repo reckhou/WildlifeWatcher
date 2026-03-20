@@ -70,6 +70,11 @@
             <TextBox Text="{Binding CooldownSeconds, UpdateSourceTrigger=PropertyChanged}"
                      Style="{StaticResource Field}"/>
 
+            <TextBlock Text="Per-species save cooldown (minutes)" Style="{StaticResource Label}"/>
+            <TextBlock Text="If the same species was already captured within this window, the new capture is silently discarded — no file is written and no database record is created. Set to 0 to disable. Default: 5 minutes." Style="{StaticResource Hint}"/>
+            <TextBox Text="{Binding SpeciesCooldownMinutes, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource Field}"/>
+
             <TextBlock Text="Frame sampling interval (seconds)" Style="{StaticResource Label}"/>
             <TextBlock Text="How often a frame is grabbed from the camera and analysed for motion. Independent of cooldown — the loop wakes up every N seconds regardless of whether a detection occurred." Style="{StaticResource Hint}"/>
             <TextBox Text="{Binding FrameIntervalSeconds, UpdateSourceTrigger=PropertyChanged}"
@@ -113,6 +118,54 @@
             <TextBlock Text="{Binding AlphaAdvice}"
                        FontSize="10" Foreground="#888" TextWrapping="Wrap"
                        Margin="0,2,0,6"/>
+
+            <!-- ═══ Location ═══ -->
+            <TextBlock Text="Location" Style="{StaticResource SectionHeader}"/>
+            <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
+            <TextBlock Text="Used for weather data paired with captures."
+                       Style="{StaticResource Hint}"/>
+
+            <DockPanel Margin="0,4,0,0">
+                <Button DockPanel.Dock="Right" Content="Search"
+                        Command="{Binding SearchLocationCommand}"
+                        Background="#2D5A27" Foreground="White"
+                        BorderThickness="0" Padding="12,4"
+                        Cursor="Hand" FontSize="12" Margin="6,0,0,0"/>
+                <TextBox Text="{Binding LocationQuery, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource Field}"
+                         Tag="City name or postcode…"/>
+            </DockPanel>
+
+            <TextBlock Text="{Binding LocationSearchStatus}"
+                       FontSize="11" Foreground="#888" Margin="0,2,0,2"/>
+
+            <ItemsControl ItemsSource="{Binding LocationResults}"
+                          Visibility="{Binding HasLocationResults,
+                                       Converter={StaticResource BoolToVisibleConverter}}"
+                          Margin="0,4,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="6,4" Cursor="Hand" Background="White"
+                                BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+                            <Border.InputBindings>
+                                <MouseBinding MouseAction="LeftClick"
+                                              Command="{Binding DataContext.SelectLocationCommand,
+                                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              CommandParameter="{Binding}"/>
+                            </Border.InputBindings>
+                            <TextBlock Text="{Binding DisplayName}"
+                                       FontSize="11" Foreground="#333" TextWrapping="Wrap"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Visibility="{Binding LocationName,
+                                    Converter={StaticResource NullOrEmptyToCollapsedConverter}}"
+                       Margin="0,4,0,8" FontSize="11" Foreground="#2D5A27">
+                <Run Text="Current: "/>
+                <Run Text="{Binding LocationName}"/>
+            </TextBlock>
 
             <!-- ═══ Data & Storage ═══ -->
             <TextBlock Text="Data &amp; Storage" Style="{StaticResource SectionHeader}"/>
@@ -169,6 +222,18 @@
             <CheckBox Content="Save POI debug images alongside captures"
                       IsChecked="{Binding SavePoiDebugImages}"
                       FontSize="12" Foreground="#444" Margin="0,4,0,4"/>
+
+            <TextBlock Text="POI sensitivity (0 = conservative, 1 = aggressive)" Style="{StaticResource Label}"/>
+            <Slider Value="{Binding PoiSensitivity}"
+                    Minimum="0" Maximum="1"
+                    TickFrequency="0.01" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding PoiSensitivity, StringFormat={}{0:F2}}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+            <TextBlock Text="{Binding PoiSensitivityAdvice}"
+                       FontSize="10" Foreground="#888" TextWrapping="Wrap"
+                       Margin="0,2,0,6"/>
 
             <!-- ═══ AI ═══ -->
             <TextBlock Text="AI Recognition" Style="{StaticResource SectionHeader}"/>
@@ -308,6 +373,39 @@
                     BorderBrush="#CC3333" BorderThickness="1"
                     Padding="10,4" Cursor="Hand" FontSize="12"
                     HorizontalAlignment="Left" Margin="0,0,0,4"/>
+
+            <!-- ═══ Updates ═══ -->
+            <TextBlock Text="Updates" Style="{StaticResource SectionHeader}"/>
+            <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                <Button Content="Check for Updates"
+                        Command="{Binding CheckForUpdatesCommand}"
+                        Background="#2D5A27" Foreground="White"
+                        BorderThickness="0" Padding="12,6"
+                        Cursor="Hand" FontSize="12"/>
+                <Button Content="Install Update"
+                        Command="{Binding InstallUpdateCommand}"
+                        Visibility="{Binding IsUpdateReadyToInstall, Converter={StaticResource BoolToVisibleConverter}}"
+                        Background="#1A6B8A" Foreground="White"
+                        BorderThickness="0" Padding="12,6"
+                        Cursor="Hand" FontSize="12" Margin="8,0,0,0"/>
+                <Button Content="Force Reinstall Latest"
+                        Command="{Binding ForceUpdateCommand}"
+                        Background="Transparent" Foreground="#888"
+                        BorderBrush="#CCCCCC" BorderThickness="1" Padding="12,6"
+                        Cursor="Hand" FontSize="12" Margin="8,0,0,0"
+                        ToolTip="Download and install the latest GitHub release regardless of version"/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding UpdateCheckStatus}"
+                       FontSize="11" Foreground="#555" Margin="0,2,0,2"
+                       TextWrapping="Wrap"/>
+
+            <ProgressBar Value="{Binding InstallProgress}"
+                         Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVisibleConverter}}"
+                         Height="6" Margin="0,4,0,4"
+                         Foreground="#2D5A27" Background="#E0E0E0"/>
 
             <!-- Save -->
             <StackPanel Orientation="Horizontal" Margin="0,20,0,24">

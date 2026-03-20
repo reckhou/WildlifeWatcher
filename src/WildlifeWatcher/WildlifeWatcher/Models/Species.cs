@@ -7,5 +7,6 @@ public class Species
     public string ScientificName { get; set; } = string.Empty;
     public string? Description { get; set; }
     public DateTime FirstDetectedAt { get; set; }
+    public string? ReferencePhotoPath { get; set; }
     public ICollection<CaptureRecord> Captures { get; set; } = new List<CaptureRecord>();
 }

@@ -130,9 +130,15 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
         IReadOnlyList<PoiRegion> poiRegions = Array.Empty<PoiRegion>();
         if (settings.EnablePoiExtraction)
         {
-            poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold);
+            poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold, settings.PoiSensitivity);
             _logger.LogInformation("POI extraction: {Count} region(s) found", poiRegions.Count);
             PoiRegionsDetected?.Invoke(this, poiRegions);
+
+            if (poiRegions.Count == 0)
+            {
+                _logger.LogInformation("POI extraction found 0 regions — skipping AI call");
+                return;
+            }
         }
 
         // ── Debug mode: save POIs locally, skip AI ───────────────────────
@@ -160,6 +166,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
             ? settings.GeminiModel
             : settings.ClaudeModel;
         _logger.LogInformation("Sending frame to AI ({Provider}/{Model})…", settings.AiProvider, activeModel);
+        var batchStartedAt = DateTime.Now;
         SetAnalyzing(true);
         try
         {
@@ -192,7 +199,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
                         cooldownSet    = true;
                     }
 
-                    try { await _captureStorage.SaveCaptureAsync(currentFrame, result, poiRegions); }
+                    try { await _captureStorage.SaveCaptureAsync(currentFrame, result, poiRegions, batchStartedAt); }
                     catch (Exception ex) { _logger.LogError(ex, "Failed to save capture"); }
 
                     var evt = new DetectionEvent

@@ -12,4 +12,12 @@ public class CaptureRecord
     public string? Notes { get; set; }
     public string? AnnotatedImageFilePath { get; set; }
     public string? AlternativesJson { get; set; }
+
+    // Weather data captured at detection time (Phase 6)
+    public double?   Temperature      { get; set; }
+    public string?   WeatherCondition { get; set; }
+    public double?   WindSpeed        { get; set; }
+    public double?   Precipitation    { get; set; }
+    public DateTime? Sunrise          { get; set; }
+    public DateTime? Sunset           { get; set; }
 }

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,20 +12,26 @@ using WildlifeWatcher.Data;
 using WildlifeWatcher.Models;
 using WildlifeWatcher.Services.Interfaces;
 using WildlifeWatcher.ViewModels.Base;
+using GeocodingResult = WildlifeWatcher.Services.Interfaces.GeocodingResult;
 
 namespace WildlifeWatcher.ViewModels;
 
 public partial class SettingsViewModel : ViewModelBase
 {
-    private readonly ISettingsService _settingsService;
-    private readonly ICredentialService _credentialService;
-    private readonly ICameraService _camera;
+    private readonly ISettingsService    _settingsService;
+    private readonly ICredentialService  _credentialService;
+    private readonly ICameraService      _camera;
+    private readonly IGeocodingService   _geocoding;
+    private readonly IUpdateService      _updateService;
     private readonly IDbContextFactory<WildlifeDbContext> _dbFactory;
     private readonly ILogger<SettingsViewModel> _logger;
 
     // Track saved paths for migration detection
-    private string _savedCapturesDirectory = string.Empty;
-    private string _savedDatabasePath = string.Empty;
+    private string  _savedCapturesDirectory      = string.Empty;
+    private string  _savedDatabasePath           = string.Empty;
+    private double? _selectedLatitude;
+    private double? _selectedLongitude;
+    private bool    _debugForceUpdateAvailable;
 
     // Camera
     [ObservableProperty] private string _rtspUrl = string.Empty;
@@ -35,6 +42,7 @@ public partial class SettingsViewModel : ViewModelBase
 
     // Capture
     [ObservableProperty] private int _cooldownSeconds = 30;
+    [ObservableProperty] private int _speciesCooldownMinutes = 5;
     [ObservableProperty] private int _frameIntervalSeconds = 30;
     [ObservableProperty] private string _capturesDirectory = "captures";
     [ObservableProperty] private double _minConfidenceThreshold = 0.7;
@@ -55,8 +63,25 @@ public partial class SettingsViewModel : ViewModelBase
     // POI
     [ObservableProperty] private bool _enablePoiExtraction = true;
     [ObservableProperty] private bool _savePoiDebugImages  = true;
+    [ObservableProperty] private double _poiSensitivity    = 0.5;
+
+    // Location (Phase 6)
+    [ObservableProperty] private string _locationQuery        = string.Empty;
+    [ObservableProperty] private string _locationSearchStatus = string.Empty;
+    [ObservableProperty] private string _locationName         = string.Empty;
+
+    public ObservableCollection<GeocodingResult> LocationResults { get; } = new();
+    public bool HasLocationResults => LocationResults.Count > 0;
 
     [ObservableProperty] private string _saveStatus = string.Empty;
+
+    // Updates
+    [ObservableProperty] private string _updateCheckStatus    = string.Empty;
+    [ObservableProperty] private bool   _isUpdateCheckBusy;
+    [ObservableProperty] private bool   _isUpdateReadyToInstall;
+    [ObservableProperty] private bool   _isInstalling;
+    [ObservableProperty] private int    _installProgress;
+    private UpdateInfo? _pendingUpdate;
 
     // Motion Zones
     [ObservableProperty] private byte[]? _zoneEditorBackground;
@@ -99,6 +124,15 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
+    public string PoiSensitivityAdvice =>
+        PoiSensitivity < 0.3
+            ? "Conservative — detects only large, high-contrast subjects (pigeons, cats)"
+            : PoiSensitivity <= 0.6
+                ? "Balanced — good for medium-sized birds"
+                : PoiSensitivity <= 0.85
+                    ? "Sensitive — detects smaller birds (goldfinches, sparrows); may increase false positives"
+                    : "Very sensitive — single-cell detection enabled; best for small/distant subjects but expect more noise";
+
     public string PixelThresholdAdvice =>
         MotionPixelThreshold < 15
             ? $"Warning: {MotionPixelThreshold} is below the noise floor — expect false triggers from camera noise and JPEG artifacts. Recommended: 20–30."
@@ -112,19 +146,26 @@ public partial class SettingsViewModel : ViewModelBase
     partial void OnFrameIntervalSecondsChanged(int value)      => OnPropertyChanged(nameof(AlphaAdvice));
     partial void OnMotionSensitivityChanged(double value)      => OnPropertyChanged(nameof(SensitivityAdvice));
     partial void OnMotionPixelThresholdChanged(int value)      => OnPropertyChanged(nameof(PixelThresholdAdvice));
+    partial void OnPoiSensitivityChanged(double value)        => OnPropertyChanged(nameof(PoiSensitivityAdvice));
 
     public SettingsViewModel(
-        ISettingsService settingsService,
+        ISettingsService   settingsService,
         ICredentialService credentialService,
-        ICameraService camera,
+        ICameraService     camera,
+        IGeocodingService  geocoding,
+        IUpdateService     updateService,
         IDbContextFactory<WildlifeDbContext> dbFactory,
         ILogger<SettingsViewModel> logger)
     {
         _settingsService   = settingsService;
         _credentialService = credentialService;
         _camera            = camera;
+        _geocoding         = geocoding;
+        _updateService     = updateService;
         _dbFactory         = dbFactory;
         _logger            = logger;
+
+        LocationResults.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasLocationResults));
 
         LoadSettings();
     }
@@ -134,6 +175,7 @@ public partial class SettingsViewModel : ViewModelBase
         var s = _settingsService.CurrentSettings;
         RtspUrl                = s.RtspUrl;
         CooldownSeconds        = s.CooldownSeconds;
+        SpeciesCooldownMinutes = s.SpeciesCooldownMinutes;
         FrameIntervalSeconds   = s.FrameExtractionIntervalSeconds;
         CapturesDirectory      = s.CapturesDirectory;
         MinConfidenceThreshold = s.MinConfidenceThreshold;
@@ -142,10 +184,16 @@ public partial class SettingsViewModel : ViewModelBase
         MotionPixelThreshold   = s.MotionPixelThreshold;
         EnablePoiExtraction    = s.EnablePoiExtraction;
         SavePoiDebugImages     = s.SavePoiDebugImages;
+        PoiSensitivity         = s.PoiSensitivity;
         AiProvider             = s.AiProvider;
         ClaudeModel            = s.ClaudeModel;
         GeminiModel            = s.GeminiModel;
         DatabasePath           = s.DatabasePath;
+
+        _selectedLatitude            = s.Latitude;
+        _selectedLongitude           = s.Longitude;
+        LocationName                 = s.LocationName;
+        _debugForceUpdateAvailable   = s.DebugForceUpdateAvailable;
 
         _savedCapturesDirectory = s.CapturesDirectory;
         _savedDatabasePath      = s.DatabasePath;
@@ -220,6 +268,7 @@ public partial class SettingsViewModel : ViewModelBase
         {
             RtspUrl                        = RtspUrl,
             CooldownSeconds                = CooldownSeconds,
+            SpeciesCooldownMinutes         = SpeciesCooldownMinutes,
             FrameExtractionIntervalSeconds = FrameIntervalSeconds,
             CapturesDirectory              = CapturesDirectory,
             MinConfidenceThreshold         = MinConfidenceThreshold,
@@ -232,12 +281,42 @@ public partial class SettingsViewModel : ViewModelBase
             EnableLocalPreFilter           = true,
             EnablePoiExtraction            = EnablePoiExtraction,
             SavePoiDebugImages             = SavePoiDebugImages,
+            PoiSensitivity                 = PoiSensitivity,
             DatabasePath                   = DatabasePath,
             MotionWhitelistZones           = new List<MotionZone>(MotionZones.Select(z => z.ToMotionZone())),
+            Latitude                       = _selectedLatitude,
+            Longitude                      = _selectedLongitude,
+            LocationName                   = LocationName,
+            DebugForceUpdateAvailable      = _debugForceUpdateAvailable,
         });
         _credentialService.SaveCredentials(RtspUsername, RtspPassword, AnthropicApiKey, GeminiApiKey);
         SaveStatus = "Settings saved.";
         _logger.LogInformation("Settings saved by user");
+    }
+
+    // ── Location search ───────────────────────────────────────────────────
+
+    [RelayCommand]
+    private async Task SearchLocationAsync()
+    {
+        if (string.IsNullOrWhiteSpace(LocationQuery)) return;
+        LocationSearchStatus = "Searching…";
+        LocationResults.Clear();
+
+        var results = await _geocoding.SearchAsync(LocationQuery);
+        foreach (var r in results) LocationResults.Add(r);
+
+        LocationSearchStatus = results.Count == 0 ? "No results found." : string.Empty;
+    }
+
+    [RelayCommand]
+    private void SelectLocation(GeocodingResult result)
+    {
+        _selectedLatitude  = result.Latitude;
+        _selectedLongitude = result.Longitude;
+        LocationName       = result.DisplayName;
+        LocationResults.Clear();
+        LocationSearchStatus = string.Empty;
     }
 
     // ── Motion Zone management ────────────────────────────────────────────
@@ -355,4 +434,132 @@ public partial class SettingsViewModel : ViewModelBase
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "WildlifeWatcher", "wildlife.db")
             : configured;
+
+    // ── Update commands ───────────────────────────────────────────────────
+
+    [RelayCommand(CanExecute = nameof(CanCheckForUpdates))]
+    private async Task CheckForUpdatesAsync()
+    {
+        IsUpdateCheckBusy      = true;
+        IsUpdateReadyToInstall = false;
+        _pendingUpdate         = null;
+        CheckForUpdatesCommand.NotifyCanExecuteChanged();
+
+        var current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
+        UpdateCheckStatus = "Checking for updates…";
+
+        try
+        {
+            var info = await _updateService.CheckForUpdateAsync();
+            if (info == null)
+            {
+                UpdateCheckStatus = "Could not reach update server.";
+            }
+            else if (info.IsUpdateAvailable)
+            {
+                _pendingUpdate         = info;
+                IsUpdateReadyToInstall = true;
+                UpdateCheckStatus      = $"v{info.LatestVersion.ToString(3)} is available (current: v{current.ToString(3)})";
+            }
+            else
+            {
+                UpdateCheckStatus = $"You are up to date (v{current.ToString(3)}).";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Update check failed");
+            UpdateCheckStatus = $"Check failed: {ex.Message}";
+        }
+        finally
+        {
+            IsUpdateCheckBusy = false;
+            CheckForUpdatesCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanCheckForUpdates() => !IsUpdateCheckBusy && !IsInstalling;
+
+    [RelayCommand(CanExecute = nameof(CanInstallUpdate))]
+    private async Task InstallUpdateAsync()
+    {
+        if (_pendingUpdate == null) return;
+        IsInstalling           = true;
+        IsUpdateReadyToInstall = false;
+        InstallUpdateCommand.NotifyCanExecuteChanged();
+        UpdateCheckStatus = "Downloading update…";
+
+        var progress = new Progress<int>(p =>
+        {
+            InstallProgress   = p;
+            UpdateCheckStatus = $"Downloading… {p}%";
+        });
+        try
+        {
+            await _updateService.ApplyUpdateAsync(_pendingUpdate, progress);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Update install failed");
+            UpdateCheckStatus      = $"Install failed: {ex.Message}";
+            IsInstalling           = false;
+            IsUpdateReadyToInstall = true;
+            InstallUpdateCommand.NotifyCanExecuteChanged();
+            CheckForUpdatesCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanInstallUpdate() => IsUpdateReadyToInstall && !IsInstalling;
+
+    [RelayCommand(CanExecute = nameof(CanForceUpdate))]
+    private async Task ForceUpdateAsync()
+    {
+        IsUpdateCheckBusy = true;
+        ForceUpdateCommand.NotifyCanExecuteChanged();
+        CheckForUpdatesCommand.NotifyCanExecuteChanged();
+        UpdateCheckStatus = "Fetching latest release…";
+
+        try
+        {
+            var info = await _updateService.CheckForUpdateAsync();
+            if (info == null)
+            {
+                UpdateCheckStatus = "Could not reach update server.";
+                return;
+            }
+            if (string.IsNullOrEmpty(info.DownloadUrl))
+            {
+                UpdateCheckStatus = "No release asset found — nothing to download.";
+                return;
+            }
+
+            // Apply regardless of version comparison
+            IsUpdateCheckBusy = false;
+            IsInstalling      = true;
+            InstallUpdateCommand.NotifyCanExecuteChanged();
+            ForceUpdateCommand.NotifyCanExecuteChanged();
+
+            var progress = new Progress<int>(p =>
+            {
+                InstallProgress   = p;
+                UpdateCheckStatus = $"Downloading… {p}%";
+            });
+            await _updateService.ApplyUpdateAsync(info, progress);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Force update failed");
+            UpdateCheckStatus = $"Failed: {ex.Message}";
+            IsInstalling      = false;
+            InstallUpdateCommand.NotifyCanExecuteChanged();
+        }
+        finally
+        {
+            IsUpdateCheckBusy = false;
+            ForceUpdateCommand.NotifyCanExecuteChanged();
+            CheckForUpdatesCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanForceUpdate() => !IsUpdateCheckBusy && !IsInstalling;
 }
