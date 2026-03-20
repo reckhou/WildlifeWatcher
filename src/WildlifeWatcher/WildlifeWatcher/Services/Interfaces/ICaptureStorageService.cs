@@ -4,9 +4,11 @@ namespace WildlifeWatcher.Services.Interfaces;
 
 public interface ICaptureStorageService
 {
-    Task<CaptureRecord> SaveCaptureAsync(byte[] jpegFrame, RecognitionResult result);
-    Task<IEnumerable<Species>> GetAllSpeciesWithCapturesAsync();
-    Task<IEnumerable<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId);
+    event EventHandler<CaptureRecord> CaptureSaved;
+    Task SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null);
+    Task<IReadOnlyList<Species>> GetAllSpeciesWithCapturesAsync();
+    Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId);
     Task DeleteCaptureAsync(int captureId);
     Task UpdateCaptureNotesAsync(int captureId, string notes);
+    Task ResetGalleryAsync(string capturesDirectory);
 }

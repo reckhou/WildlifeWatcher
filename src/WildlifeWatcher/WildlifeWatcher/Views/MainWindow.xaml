@@ -24,6 +24,26 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="DebugToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#CCDDCC"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#7A3000"/>
+                    <Setter Property="Foreground" Value="#FFCC88"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#2D4A2D"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -49,19 +69,17 @@
                     Command="{Binding NavigateToCommand}"
                     CommandParameter="{x:Static vm:AppPage.Settings}"
                     Style="{StaticResource NavButtonStyle}"/>
+
+            <Separator Background="#2D4A2D" Margin="16,8"/>
+
+            <ToggleButton Content="🐛 Debug Mode"
+                          IsChecked="{Binding IsDebugMode, Mode=TwoWay}"
+                          Style="{StaticResource DebugToggleStyle}"
+                          ToolTip="Save POI crops to disk instead of sending to AI"/>
         </StackPanel>
 
-        <!-- Main content area — placeholder until Phase 2 -->
-        <Border Grid.Column="1" Background="#F5F5F0">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="Wildlife Watcher" FontSize="28" FontWeight="Bold"
-                           Foreground="#2D5A27" HorizontalAlignment="Center"/>
-                <TextBlock Text="Phase 1 scaffolding complete." FontSize="14"
-                           Foreground="#666" HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                <TextBlock Text="{Binding StatusText}" FontSize="12"
-                           Foreground="#888" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-            </StackPanel>
-        </Border>
+        <!-- Main content area -->
+        <ContentControl x:Name="PageContentControl" Grid.Column="1"/>
     </Grid>
 
 </Window>

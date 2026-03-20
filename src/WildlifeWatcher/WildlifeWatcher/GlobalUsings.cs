@@ -1,0 +1,10 @@
+// Disambiguate WPF types that conflict with Windows Forms when UseWindowsForms=true
+global using Application = System.Windows.Application;
+global using UserControl = System.Windows.Controls.UserControl;
+global using Brush = System.Windows.Media.Brush;
+global using Brushes = System.Windows.Media.Brushes;
+global using MessageBox = System.Windows.MessageBox;
+global using MessageBoxButton = System.Windows.MessageBoxButton;
+global using MessageBoxImage = System.Windows.MessageBoxImage;
+global using MessageBoxResult = System.Windows.MessageBoxResult;
+global using OpenFileDialog = Microsoft.Win32.OpenFileDialog;

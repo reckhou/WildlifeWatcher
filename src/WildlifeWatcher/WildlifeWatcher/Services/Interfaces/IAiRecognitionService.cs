@@ -1,14 +1,28 @@
 namespace WildlifeWatcher.Services.Interfaces;
 
+public record SpeciesCandidate(
+    string CommonName,
+    string ScientificName,
+    double Confidence,
+    string Description);
+
 public record RecognitionResult(
     bool Detected,
     string CommonName,
     string ScientificName,
     double Confidence,
     string Description,
-    string RawResponse);
+    string RawResponse,
+    IReadOnlyList<SpeciesCandidate> Candidates);
 
 public interface IAiRecognitionService
 {
-    Task<RecognitionResult> RecognizeAsync(byte[] jpegFrame, CancellationToken ct = default);
+    /// <summary>
+    /// Recognizes wildlife. When <paramref name="poiJpegs"/> is non-empty the crops
+    /// are sent to the AI instead of the full frame, improving detection of small subjects.
+    /// </summary>
+    Task<RecognitionResult> RecognizeAsync(
+        byte[] fullFramePng,
+        IReadOnlyList<byte[]>? poiJpegs = null,
+        CancellationToken ct = default);
 }

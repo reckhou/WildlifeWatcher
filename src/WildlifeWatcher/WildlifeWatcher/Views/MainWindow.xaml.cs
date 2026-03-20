@@ -1,13 +1,44 @@
-﻿using System.Windows;
+using System.Windows;
 using WildlifeWatcher.ViewModels;
+using WildlifeWatcher.Views.Pages;
 
 namespace WildlifeWatcher.Views;
 
 public partial class MainWindow : Window
 {
-    public MainWindow(MainViewModel viewModel)
+    private readonly LiveViewPage _liveViewPage;
+    private readonly SettingsPage _settingsPage;
+    private readonly GalleryPage  _galleryPage;
+
+    public MainWindow(
+        MainViewModel viewModel,
+        LiveViewPage liveViewPage,
+        SettingsPage settingsPage,
+        GalleryPage galleryPage)
     {
         InitializeComponent();
         DataContext = viewModel;
+
+        _liveViewPage = liveViewPage;
+        _settingsPage = settingsPage;
+        _galleryPage  = galleryPage;
+
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.CurrentPage))
+                UpdateContentArea(viewModel.CurrentPage);
+        };
+
+        UpdateContentArea(viewModel.CurrentPage);
+    }
+
+    private void UpdateContentArea(AppPage page)
+    {
+        PageContentControl.Content = page switch
+        {
+            AppPage.LiveView => (object)_liveViewPage,
+            AppPage.Settings => _settingsPage,
+            _ => _galleryPage
+        };
     }
 }

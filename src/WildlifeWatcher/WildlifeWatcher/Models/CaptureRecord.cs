@@ -10,4 +10,6 @@ public class CaptureRecord
     public string AiRawResponse { get; set; } = string.Empty;
     public double ConfidenceScore { get; set; }
     public string? Notes { get; set; }
+    public string? AnnotatedImageFilePath { get; set; }
+    public string? AlternativesJson { get; set; }
 }
