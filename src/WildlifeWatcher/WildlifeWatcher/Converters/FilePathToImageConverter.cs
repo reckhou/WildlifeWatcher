@@ -10,7 +10,7 @@ public class FilePathToImageConverter : IValueConverter
 {
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is not string path || string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (value is not string path || string.IsNullOrWhiteSpace(path))
             return null;
         try
         {

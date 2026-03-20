@@ -380,39 +380,57 @@
                         <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedDateLabel}"
                                    FontSize="12" FontWeight="Bold" Foreground="#2D5A27"
                                    Margin="0,0,0,6"/>
-                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                      VerticalScrollBarVisibility="Disabled">
-                            <ItemsControl ItemsSource="{Binding SelectedDayCaptures}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Width="100" Margin="4,0" Background="White"
-                                                CornerRadius="4" Cursor="Hand"
-                                                BorderBrush="#E0E0E0" BorderThickness="1">
-                                            <Border.InputBindings>
-                                                <MouseBinding MouseAction="LeftClick"
-                                                              Command="{Binding DataContext.OpenDayCaptureCommand,
-                                                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                              CommandParameter="{Binding}"/>
-                                            </Border.InputBindings>
-                                            <StackPanel>
-                                                <Image Height="70" Stretch="UniformToFill"
-                                                       Source="{Binding DisplayImagePath,
-                                                                Converter={StaticResource FilePathToImageConverter}}"
-                                                       ClipToBounds="True"/>
-                                                <TextBlock Text="{Binding TimeLabel}"
-                                                           FontSize="9" Foreground="#444"
-                                                           Margin="4,2" TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                        <ListBox ItemsSource="{Binding SelectedDayCaptures}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.VirtualizationMode="Recycling"
+                                 VirtualizingPanel.ScrollUnit="Pixel"
+                                 SelectionMode="Single">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <ContentPresenter/>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="100" Margin="4,0" Background="White"
+                                            CornerRadius="4" Cursor="Hand"
+                                            BorderBrush="#E0E0E0" BorderThickness="1">
+                                        <Border.InputBindings>
+                                            <MouseBinding MouseAction="LeftClick"
+                                                          Command="{Binding DataContext.OpenDayCaptureCommand,
+                                                                    RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          CommandParameter="{Binding}"/>
+                                        </Border.InputBindings>
+                                        <StackPanel>
+                                            <Image Height="70" Stretch="UniformToFill"
+                                                   Source="{Binding DisplayImagePath,
+                                                            Converter={StaticResource FilePathToImageConverter}}"
+                                                   ClipToBounds="True"/>
+                                            <TextBlock Text="{Binding TimeLabel}"
+                                                       FontSize="9" Foreground="#444"
+                                                       Margin="4,2" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </DockPanel>
                 </Border>
 

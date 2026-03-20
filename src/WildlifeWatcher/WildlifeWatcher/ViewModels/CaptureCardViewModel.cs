@@ -10,10 +10,13 @@ public class CaptureCardViewModel
     public string        TimeLabel       => Record.CapturedAt.ToString("dd MMM  HH:mm:ss");
     public string        ConfidenceLabel => $"{Record.ConfidenceScore:P0}";
 
-    public string DisplayImagePath =>
-        Record.AnnotatedImageFilePath is { Length: > 0 } p && File.Exists(p)
-            ? p
-            : Record.ImageFilePath;
+    public string DisplayImagePath { get; }
 
-    public CaptureCardViewModel(CaptureRecord record) => Record = record;
+    public CaptureCardViewModel(CaptureRecord record)
+    {
+        Record = record;
+        DisplayImagePath = record.AnnotatedImageFilePath is { Length: > 0 } p && File.Exists(p)
+            ? p
+            : record.ImageFilePath;
+    }
 }
