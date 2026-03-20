@@ -1,10 +1,8 @@
 using System.IO;
 using System.Text.Json;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using SkiaSharp;
 using WildlifeWatcher.Data;
 using WildlifeWatcher.Models;
 using WildlifeWatcher.Services.Interfaces;
@@ -304,120 +302,81 @@ public class CaptureStorageService : ICaptureStorageService
             .ToListAsync();
     }
 
-    private static async Task<byte[]> DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)
+    private static Task<byte[]> DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)
     {
-        return await Application.Current.Dispatcher.InvokeAsync(() =>
+        return Task.Run(() =>
         {
-            using var ms = new MemoryStream(jpegBytes);
-            var source   = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-            double w     = source.PixelWidth;
-            double h     = source.PixelHeight;
+            using var bitmap = SKBitmap.Decode(jpegBytes);
+            using var canvas = new SKCanvas(bitmap);
+            float w = bitmap.Width;
+            float h = bitmap.Height;
 
-            var pen = new System.Windows.Media.Pen(
-                new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 255, 136)), 3);
-            pen.Freeze();
-            var textBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 255, 136));
-            textBrush.Freeze();
-            var bgBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 0, 0, 0));
-            bgBrush.Freeze();
-            var typeface  = new System.Windows.Media.Typeface("Arial");
-            double fontSize = Math.Max(14, w * 0.016);
-
-            var visual = new DrawingVisual();
-            using (var dc = visual.RenderOpen())
+            using var boxPaint = new SKPaint
             {
-                dc.DrawImage(source, new System.Windows.Rect(0, 0, w, h));
+                Color       = new SKColor(0, 255, 136),
+                Style       = SKPaintStyle.Stroke,
+                StrokeWidth = 3,
+                IsAntialias = true
+            };
+            using var textPaint = new SKPaint { Color = new SKColor(0, 255, 136), IsAntialias = true };
+            using var font      = new SKFont(SKTypeface.FromFamilyName("Arial"), Math.Max(14, w * 0.016f));
+            using var bgPaint   = new SKPaint { Color = new SKColor(0, 0, 0, 180), Style = SKPaintStyle.Fill };
 
-                foreach (var poi in regions)
+            foreach (var poi in regions)
+            {
+                var rect = SKRect.Create(
+                    (float)(poi.NLeft * w), (float)(poi.NTop * h),
+                    (float)(poi.NWidth * w), (float)(poi.NHeight * h));
+                canvas.DrawRect(rect, boxPaint);
+
+                bool isSource = sourcePoiIndex == null || poi.Index == sourcePoiIndex;
+                if (isSource)
                 {
-                    var rect = new System.Windows.Rect(
-                        poi.NLeft * w, poi.NTop * h, poi.NWidth * w, poi.NHeight * h);
-                    dc.DrawRectangle(null, pen, rect);
+                    float textWidth  = font.MeasureText(speciesLabel);
+                    float textHeight = font.Size;
+                    float labelY     = Math.Max(0, rect.Top - textHeight - 4);
 
-                    bool isSource = sourcePoiIndex == null || poi.Index == sourcePoiIndex;
-                    if (isSource)
-                    {
-                        var ft = new System.Windows.Media.FormattedText(
-                            speciesLabel,
-                            System.Globalization.CultureInfo.InvariantCulture,
-                            System.Windows.FlowDirection.LeftToRight,
-                            typeface, fontSize, textBrush, 1.0);
-
-                        // Place label just above the box; clamp to top edge
-                        double labelY = Math.Max(0, rect.Y - ft.Height - 4);
-                        var labelBg   = new System.Windows.Rect(rect.X, labelY, ft.Width + 8, ft.Height + 4);
-                        dc.DrawRectangle(bgBrush, null, labelBg);
-                        dc.DrawText(ft, new System.Windows.Point(rect.X + 4, labelY + 2));
-                    }
+                    canvas.DrawRect(rect.Left, labelY, textWidth + 8, textHeight + 4, bgPaint);
+                    canvas.DrawText(speciesLabel, rect.Left + 4, labelY + textHeight, SKTextAlign.Left, font, textPaint);
                 }
             }
 
-            var rtb = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
-            rtb.Render(visual);
-            rtb.Freeze();
-
-            var encoder = new JpegBitmapEncoder { QualityLevel = 85 };
-            encoder.Frames.Add(BitmapFrame.Create(rtb));
-            using var outMs = new MemoryStream();
-            encoder.Save(outMs);
-            return outMs.ToArray();
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data  = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+            return data.ToArray();
         });
     }
 
-    internal static async Task<byte[]> LabelCropJpeg(byte[] jpegCrop, string label)
+    internal static Task<byte[]> LabelCropJpeg(byte[] jpegCrop, string label)
     {
-        return await Application.Current.Dispatcher.InvokeAsync(() =>
+        return Task.Run(() =>
         {
-            using var ms = new MemoryStream(jpegCrop);
-            var source   = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-            double w     = source.PixelWidth;
-            double h     = source.PixelHeight;
+            using var bitmap = SKBitmap.Decode(jpegCrop);
+            using var canvas = new SKCanvas(bitmap);
+            float w = bitmap.Width;
+            float h = bitmap.Height;
 
-            var textBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 255, 136));
-            textBrush.Freeze();
-            var bgBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(200, 0, 0, 0));
-            bgBrush.Freeze();
-            var typeface  = new System.Windows.Media.Typeface("Arial");
-            double fontSize = Math.Max(12, w * 0.045);
+            float fontSize = Math.Max(12, w * 0.045f);
+            using var textPaint = new SKPaint { Color = new SKColor(0, 255, 136), IsAntialias = true };
+            using var font      = new SKFont(SKTypeface.FromFamilyName("Arial"), fontSize);
+            using var bgPaint   = new SKPaint { Color = new SKColor(0, 0, 0, 200), Style = SKPaintStyle.Fill };
 
-            var ft = new System.Windows.Media.FormattedText(
-                label,
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Windows.FlowDirection.LeftToRight,
-                typeface, fontSize, textBrush, 1.0);
+            // Label strip at the bottom of the crop
+            canvas.DrawRect(0, h - fontSize - 8, w, fontSize + 8, bgPaint);
+            canvas.DrawText(label, 4, h - 4, SKTextAlign.Left, font, textPaint);
 
-            var visual = new DrawingVisual();
-            using (var dc = visual.RenderOpen())
-            {
-                dc.DrawImage(source, new System.Windows.Rect(0, 0, w, h));
-                // Label strip at the bottom of the crop
-                var bgRect = new System.Windows.Rect(0, h - ft.Height - 8, w, ft.Height + 8);
-                dc.DrawRectangle(bgBrush, null, bgRect);
-                dc.DrawText(ft, new System.Windows.Point(4, h - ft.Height - 4));
-            }
-
-            var rtb = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
-            rtb.Render(visual);
-            rtb.Freeze();
-
-            var encoder = new JpegBitmapEncoder { QualityLevel = 85 };
-            encoder.Frames.Add(BitmapFrame.Create(rtb));
-            using var outMs = new MemoryStream();
-            encoder.Save(outMs);
-            return outMs.ToArray();
+            using var image = SKImage.FromBitmap(bitmap);
+            using var data  = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+            return data.ToArray();
         });
     }
 
     private static byte[] ConvertPngToJpeg(byte[] pngBytes, int quality = 85)
     {
-        using var ms  = new MemoryStream(pngBytes);
-        var frame     = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-        frame.Freeze();
-        var encoder   = new JpegBitmapEncoder { QualityLevel = quality };
-        encoder.Frames.Add(BitmapFrame.Create(frame));
-        using var outMs = new MemoryStream();
-        encoder.Save(outMs);
-        return outMs.ToArray();
+        using var bitmap = SKBitmap.Decode(pngBytes);
+        using var image  = SKImage.FromBitmap(bitmap);
+        using var data   = image.Encode(SKEncodedImageFormat.Jpeg, quality);
+        return data.ToArray();
     }
 
     internal static string ResolveCapturesDir(string configured)

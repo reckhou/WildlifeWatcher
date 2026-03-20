@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WildlifeWatcher.Services.Interfaces;
 
 namespace WildlifeWatcher.Services;
@@ -8,10 +9,12 @@ namespace WildlifeWatcher.Services;
 public class NominatimGeocodingService : IGeocodingService
 {
     private readonly HttpClient _http;
+    private readonly ILogger<NominatimGeocodingService> _logger;
 
-    public NominatimGeocodingService(IHttpClientFactory factory)
+    public NominatimGeocodingService(IHttpClientFactory factory, ILogger<NominatimGeocodingService> logger)
     {
-        _http = factory.CreateClient("nominatim");
+        _http   = factory.CreateClient("nominatim");
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<GeocodingResult>> SearchAsync(string query)
@@ -32,8 +35,9 @@ public class NominatimGeocodingService : IGeocodingService
             }
             return results;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to geocode query");
             return Array.Empty<GeocodingResult>();
         }
     }

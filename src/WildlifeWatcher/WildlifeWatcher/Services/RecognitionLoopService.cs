@@ -6,7 +6,7 @@ using WildlifeWatcher.Services.Interfaces;
 
 namespace WildlifeWatcher.Services;
 
-public class RecognitionLoopService : IHostedService, IRecognitionLoopService
+public class RecognitionLoopService : IHostedService, IRecognitionLoopService, IDisposable
 {
     private readonly ICameraService              _camera;
     private readonly IAiRecognitionService       _ai;
@@ -61,8 +61,17 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
     {
         IsRunning = false;
         _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
         _logger.LogInformation("Recognition loop stopped");
         return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
     }
 
     // ── Main loop ─────────────────────────────────────────────────────────
@@ -257,15 +266,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
     }
 
     private static string ResolveCapturesDir(string configured)
-    {
-        var dir = configured;
-        if (!Path.IsPathRooted(dir))
-            dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "WildlifeWatcher", dir);
-        Directory.CreateDirectory(dir);
-        return dir;
-    }
+        => CaptureStorageService.ResolveCapturesDir(configured);
 
     // ── Helpers ───────────────────────────────────────────────────────────
 

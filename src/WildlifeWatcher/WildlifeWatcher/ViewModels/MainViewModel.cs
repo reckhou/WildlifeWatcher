@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using WildlifeWatcher.Models;
 using WildlifeWatcher.Services.Interfaces;
 using WildlifeWatcher.ViewModels.Base;
@@ -15,6 +16,7 @@ public partial class MainViewModel : ViewModelBase
 {
     private readonly IRecognitionLoopService _recognitionLoop;
     private readonly IUpdateService          _updateService;
+    private readonly ILogger<MainViewModel>  _logger;
     private readonly DispatcherTimer         _statusClearTimer;
     private UpdateInfo? _pendingUpdate;
 
@@ -33,10 +35,12 @@ public partial class MainViewModel : ViewModelBase
     public MainViewModel(
         IRecognitionLoopService recognitionLoop,
         ICaptureStorageService  captureStorage,
-        IUpdateService          updateService)
+        IUpdateService          updateService,
+        ILogger<MainViewModel>  logger)
     {
         _recognitionLoop = recognitionLoop;
         _updateService   = updateService;
+        _logger          = logger;
 
         _statusClearTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _statusClearTimer.Tick += (_, _) => { StatusText = "Ready"; _statusClearTimer.Stop(); };
@@ -48,15 +52,20 @@ public partial class MainViewModel : ViewModelBase
                 _statusClearTimer.Start();
             });
 
-        // Fire-and-forget update check after app finishes loading
-#pragma warning disable CS4014
+        // Background update check after app finishes loading
         _ = Task.Run(async () =>
         {
-            await Task.Delay(3000);
-            await Application.Current.Dispatcher.InvokeAsync(
-                () => CheckForUpdateCommand.ExecuteAsync(null));
+            try
+            {
+                await Task.Delay(3000);
+                await Application.Current.Dispatcher.InvokeAsync(
+                    () => CheckForUpdateCommand.ExecuteAsync(null)).Task.Unwrap();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background update check failed");
+            }
         });
-#pragma warning restore CS4014
     }
 
     partial void OnIsDebugModeChanged(bool value) =>

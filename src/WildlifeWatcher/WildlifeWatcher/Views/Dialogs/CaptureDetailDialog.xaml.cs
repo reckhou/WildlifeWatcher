@@ -77,8 +77,9 @@ public partial class CaptureDetailDialog : Window
     {
         var img = new BitmapImage();
         img.BeginInit();
-        img.UriSource   = new Uri(path, UriKind.Absolute);
-        img.CacheOption = BitmapCacheOption.OnLoad;
+        img.UriSource        = new Uri(path, UriKind.Absolute);
+        img.CacheOption      = BitmapCacheOption.OnLoad;
+        img.DecodePixelWidth = 800;
         img.EndInit();
         img.Freeze();
         CaptureImage.Source = img;

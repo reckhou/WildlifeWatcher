@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WildlifeWatcher.Services.Interfaces;
 
 namespace WildlifeWatcher.Services;
@@ -8,10 +9,12 @@ namespace WildlifeWatcher.Services;
 public class OpenMeteoWeatherService : IWeatherService
 {
     private readonly HttpClient _http;
+    private readonly ILogger<OpenMeteoWeatherService> _logger;
 
-    public OpenMeteoWeatherService(IHttpClientFactory factory)
+    public OpenMeteoWeatherService(IHttpClientFactory factory, ILogger<OpenMeteoWeatherService> logger)
     {
-        _http = factory.CreateClient("openmeteo");
+        _http   = factory.CreateClient("openmeteo");
+        _logger = logger;
     }
 
     public async Task<WeatherSnapshot?> GetCurrentWeatherAsync(double latitude, double longitude)
@@ -43,8 +46,9 @@ public class OpenMeteoWeatherService : IWeatherService
 
             return new WeatherSnapshot(temp, WmoToCondition(code), wind, precip, sunrise, sunset);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to fetch weather data");
             return null;
         }
     }

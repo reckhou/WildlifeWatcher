@@ -8,14 +8,14 @@ namespace WildlifeWatcher.Services;
 
 public class BirdPhotoService : IBirdPhotoService
 {
-    private readonly HttpClient _http;
+    private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<BirdPhotoService> _logger;
     private readonly string _cacheDir;
 
-    public BirdPhotoService(HttpClient http, ILogger<BirdPhotoService> logger)
+    public BirdPhotoService(IHttpClientFactory httpFactory, ILogger<BirdPhotoService> logger)
     {
-        _http     = http;
-        _logger   = logger;
+        _httpFactory = httpFactory;
+        _logger      = logger;
         _cacheDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "WildlifeWatcher", "species_photos");
@@ -33,8 +33,9 @@ public class BirdPhotoService : IBirdPhotoService
 
         try
         {
-            var url      = $"https://api.inaturalist.org/v1/taxa?q={Uri.EscapeDataString(scientificName)}&rank=species&per_page=1";
-            var response = await _http.GetStringAsync(url, ct);
+            var http     = _httpFactory.CreateClient("inaturalist");
+            var url      = $"v1/taxa?q={Uri.EscapeDataString(scientificName)}&rank=species&per_page=1";
+            var response = await http.GetStringAsync(url, ct);
 
             using var doc    = JsonDocument.Parse(response);
             var results      = doc.RootElement.GetProperty("results");
@@ -47,7 +48,7 @@ public class BirdPhotoService : IBirdPhotoService
 
             if (string.IsNullOrEmpty(photoUrl)) return null;
 
-            var imageBytes = await _http.GetByteArrayAsync(photoUrl, ct);
+            var imageBytes = await http.GetByteArrayAsync(photoUrl, ct);
             await File.WriteAllBytesAsync(cachePath, imageBytes, ct);
             _logger.LogInformation("Cached reference photo for {Name} at {Path}", scientificName, cachePath);
             return cachePath;

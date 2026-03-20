@@ -1,5 +1,4 @@
 using System.IO;
-using System.Net.Http;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,11 +54,10 @@ public partial class App : Application
                 // Camera (Phase 2)
                 services.AddSingleton<ICameraService, RtspCameraService>();
 
-                // AI recognition (Phase 3) — provider selected at startup
-                if (bootstrap.CurrentSettings.AiProvider == AiProvider.Gemini)
-                    services.AddSingleton<IAiRecognitionService, GeminiRecognitionService>();
-                else
-                    services.AddSingleton<IAiRecognitionService, ClaudeRecognitionService>();
+                // AI recognition (Phase 3) — provider resolved at runtime via settings
+                services.AddSingleton<ClaudeRecognitionService>();
+                services.AddSingleton<GeminiRecognitionService>();
+                services.AddSingleton<IAiRecognitionService, AiRecognitionServiceResolver>();
                 services.AddSingleton<IBackgroundModelService, BackgroundModelService>();
                 services.AddSingleton<IMotionDetectionService, MotionDetectionService>();
                 services.AddSingleton<IPointOfInterestService, PointOfInterestService>();
@@ -70,11 +68,14 @@ public partial class App : Application
                 // Capture storage (Phase 4)
                 services.AddSingleton<ICaptureStorageService, CaptureStorageService>();
 
-                // Bird photo service (legacy singleton HttpClient — kept for BirdPhotoService)
-                services.AddSingleton<HttpClient>();
+                // Bird photo service
                 services.AddSingleton<IBirdPhotoService, BirdPhotoService>();
 
-                // Named HTTP clients (Phase 6 — weather/geocoding; Phase 7 — update check)
+                // Named HTTP clients
+                services.AddHttpClient("inaturalist", c => {
+                    c.BaseAddress = new Uri("https://api.inaturalist.org/");
+                    c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0");
+                });
                 services.AddHttpClient("nominatim", c => {
                     c.BaseAddress = new Uri("https://nominatim.openstreetmap.org/");
                     c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0");

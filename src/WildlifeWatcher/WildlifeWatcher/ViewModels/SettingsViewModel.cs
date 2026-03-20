@@ -230,15 +230,15 @@ public partial class SettingsViewModel : ViewModelBase
                     {
                         Directory.CreateDirectory(newDir);
                         await using var db = await _dbFactory.CreateDbContextAsync();
-                        var records = await db.CaptureRecords.ToListAsync();
                         foreach (var jpg in jpgs)
                         {
-                            var dest = Path.Combine(newDir, Path.GetFileName(jpg));
-                            File.Move(jpg, dest, overwrite: true);
-                            var rec = records.FirstOrDefault(r => r.ImageFilePath == jpg);
-                            if (rec != null) rec.ImageFilePath = dest;
+                            var fileName = Path.GetFileName(jpg);
+                            var dest = Path.Combine(newDir, fileName);
+                            await Task.Run(() => File.Move(jpg, dest, overwrite: true));
+                            await db.CaptureRecords
+                                .Where(r => r.ImageFilePath == jpg)
+                                .ExecuteUpdateAsync(x => x.SetProperty(r => r.ImageFilePath, dest));
                         }
-                        await db.SaveChangesAsync();
                         _logger.LogInformation("Moved {Count} capture file(s) to {Dir}", jpgs.Length, newDir);
                     }
                 }
@@ -360,12 +360,7 @@ public partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private void OpenCaptureFolder()
     {
-        var path = CapturesDirectory;
-        if (!Path.IsPathRooted(path))
-            path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "WildlifeWatcher", path);
-        Directory.CreateDirectory(path);
+        var path = Services.CaptureStorageService.ResolveCapturesDir(CapturesDirectory);
         Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
     }
 

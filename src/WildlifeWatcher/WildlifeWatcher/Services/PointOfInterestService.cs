@@ -1,7 +1,5 @@
 using System.IO;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using SkiaSharp;
 using WildlifeWatcher.Models;
 using WildlifeWatcher.Services.Interfaces;
 
@@ -88,9 +86,18 @@ public class PointOfInterestService : IPointOfInterestService
             {
                 var (cr, cc) = queue.Dequeue();
                 component.Add((cr, cc));
-                foreach (var (nr, nc) in (use8Neighbor ? Neighbors8(cr, cc) : Neighbors4(cr, cc)))
+
+                // Inline neighbor iteration to avoid iterator state machine allocations
+                int startDr = use8Neighbor ? -1 : 0;
+                int endDr   = use8Neighbor ?  1 : 0;
+                for (int dr = startDr; dr <= endDr; dr++)
+                for (int dc = -1; dc <= 1; dc++)
                 {
-                    if (!visited[nr, nc] && hotCells[nr, nc])
+                    if (dr == 0 && dc == 0) continue;
+                    if (!use8Neighbor && dr != 0 && dc != 0) continue; // skip diagonals for 4-neighbor
+                    int nr = cr + dr, nc = cc + dc;
+                    if (nr >= 0 && nr < GridRows && nc >= 0 && nc < GridCols &&
+                        !visited[nr, nc] && hotCells[nr, nc])
                     {
                         visited[nr, nc] = true;
                         queue.Enqueue((nr, nc));
@@ -110,13 +117,13 @@ public class PointOfInterestService : IPointOfInterestService
         if (components.Count > MaxRegions)
             components.RemoveRange(MaxRegions, components.Count - MaxRegions);
 
-        // ── 3. Decode full-res frame once ───────────────────────────────────
-        BitmapSource fullRes;
-        using (var ms = new MemoryStream(currentFrame))
-            fullRes = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        // ── 3. Decode full-res frame once (SkiaSharp — no UI thread needed) ──
+        using var fullRes = SKBitmap.Decode(currentFrame);
+        if (fullRes == null)
+            return Array.Empty<PoiRegion>();
 
-        int imgW = fullRes.PixelWidth;
-        int imgH = fullRes.PixelHeight;
+        int imgW = fullRes.Width;
+        int imgH = fullRes.Height;
 
         // ── 4. Map each component to a padded crop ──────────────────────────
         var regions = new List<PoiRegion>(components.Count);
@@ -184,25 +191,33 @@ public class PointOfInterestService : IPointOfInterestService
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static byte[] CropAndEncode(BitmapSource source, int x, int y, int w, int h)
+    private static byte[] CropAndEncode(SKBitmap source, int x, int y, int w, int h)
     {
-        var cropped  = new CroppedBitmap(source, new Int32Rect(x, y, w, h));
-        cropped.Freeze();
-        BitmapSource toEncode = cropped;
+        var subset = new SKRectI(x, y, x + w, y + h);
+        using var cropped = new SKBitmap();
+        source.ExtractSubset(cropped, subset);
 
-        if (w > CropMaxDimension || h > CropMaxDimension)
+        SKBitmap toEncode = cropped;
+        SKBitmap? scaled  = null;
+        try
         {
-            var scale    = Math.Min((double)CropMaxDimension / w, (double)CropMaxDimension / h);
-            var scaled   = new TransformedBitmap(cropped, new ScaleTransform(scale, scale));
-            scaled.Freeze();
-            toEncode     = scaled;
-        }
+            if (w > CropMaxDimension || h > CropMaxDimension)
+            {
+                var scale = Math.Min((double)CropMaxDimension / w, (double)CropMaxDimension / h);
+                int newW  = (int)(w * scale);
+                int newH  = (int)(h * scale);
+                scaled    = cropped.Resize(new SKSizeI(newW, newH), SKSamplingOptions.Default);
+                toEncode  = scaled;
+            }
 
-        var encoder = new JpegBitmapEncoder { QualityLevel = 85 };
-        encoder.Frames.Add(BitmapFrame.Create(toEncode));
-        using var ms = new MemoryStream();
-        encoder.Save(ms);
-        return ms.ToArray();
+            using var image = SKImage.FromBitmap(toEncode);
+            using var data  = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+            return data.ToArray();
+        }
+        finally
+        {
+            scaled?.Dispose();
+        }
     }
 
     private static IEnumerable<(int r, int c)> Neighbors4(int r, int c)

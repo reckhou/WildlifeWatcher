@@ -9,6 +9,9 @@ obj/
 *.suo
 *.userprefs
 
+# VS build temp files
+*_wpftmp.csproj
+
 # NuGet
 *.nupkg
 .nuget/
