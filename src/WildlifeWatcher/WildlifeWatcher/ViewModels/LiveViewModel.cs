@@ -35,6 +35,7 @@ public partial class LiveViewModel : ViewModelBase
     [ObservableProperty] private bool   _isTrainingComplete   = true;
     [ObservableProperty] private string _trainingStatusText   = string.Empty;
     [ObservableProperty] private string _trainingTimeLeftText = string.Empty;
+    [ObservableProperty] private string _modelDataAgeText     = string.Empty;
 
     public MediaPlayer MediaPlayer => _camera.MediaPlayer;
     public ObservableCollection<DetectionEvent>   RecentDetections { get; } = new();
@@ -195,6 +196,7 @@ public partial class LiveViewModel : ViewModelBase
                 TrainingProgress     = _backgroundModel.TrainingProgress;
                 TrainingStatusText   = IsTrainingComplete ? string.Empty : $"Training… {_backgroundModel.TrainingProgress:P0}";
                 TrainingTimeLeftText = IsTrainingComplete ? string.Empty : ComputeTimeLeftText();
+                ModelDataAgeText     = ComputeModelDataAgeText();
             });
         }
         else
@@ -202,6 +204,8 @@ public partial class LiveViewModel : ViewModelBase
             _backgroundModel.SaveState();
             _logger.LogInformation("Background model saved to disk");
             _backgroundModel.Reset();
+
+            Application.Current.Dispatcher.Invoke(() => ModelDataAgeText = string.Empty);
         }
 
         Application.Current.Dispatcher.Invoke(() =>
@@ -247,7 +251,19 @@ public partial class LiveViewModel : ViewModelBase
             IsTrainingComplete   = _backgroundModel.IsTrainingComplete;
             TrainingStatusText   = IsTrainingComplete ? string.Empty : $"Training… {progress:P0}";
             TrainingTimeLeftText = IsTrainingComplete ? string.Empty : ComputeTimeLeftText();
+            if (IsTrainingComplete)
+                ModelDataAgeText = ComputeModelDataAgeText();
         });
+    }
+
+    private string ComputeModelDataAgeText()
+    {
+        if (_backgroundModel.SavedAt is not { } savedAt)
+            return string.Empty;
+        var age = DateTime.UtcNow - savedAt;
+        if (age.TotalSeconds < 90)  return "Model: just updated";
+        if (age.TotalMinutes < 60)  return $"Model: {(int)age.TotalMinutes} min old";
+        return $"Model: {(int)age.TotalHours}h {age.Minutes:D2}m old";
     }
 
     private string ComputeTimeLeftText()

@@ -28,6 +28,9 @@ public interface IBackgroundModelService
     /// <summary>Number of frames processed since last Reset or Load.</summary>
     int FrameCount { get; }
 
+    /// <summary>UTC time when the model was last saved or loaded from disk. Null if cold-started.</summary>
+    DateTime? SavedAt { get; }
+
     /// <summary>Frames needed until the initial frame contributes &lt;5% to the EMA background.</summary>
     int TrainingFramesNeeded { get; }
 

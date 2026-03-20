@@ -74,10 +74,10 @@
             <TextBlock Text="Motion sensitivity (0 = low, 1 = high)" Style="{StaticResource Label}"/>
             <Slider Value="{Binding MotionSensitivity}"
                     Minimum="0" Maximum="1"
-                    TickFrequency="0.1" IsSnapToTickEnabled="True"
+                    TickFrequency="0.01" IsSnapToTickEnabled="True"
                     TickPlacement="BottomRight"
                     Margin="0,4,0,0"/>
-            <TextBlock Text="{Binding MotionSensitivity, StringFormat={}{0:F1}}"
+            <TextBlock Text="{Binding MotionSensitivity, StringFormat={}{0:F2}}"
                        FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
             <TextBlock Text="{Binding SensitivityAdvice}"
                        FontSize="10" Foreground="#888" TextWrapping="Wrap"

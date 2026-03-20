@@ -88,12 +88,14 @@ public partial class SettingsViewModel : ViewModelBase
         get
         {
             double trigger = (1.0 - MotionSensitivity) * 0.08 * 100;
-            return $"Triggers when ≥{trigger:F1}% of pixels differ from background (was 7.5% at default; now {trigger:F1}% with new base). " +
-                   (MotionSensitivity >= 0.7
-                       ? "High — sensitive to tiny movement, more false positives."
-                       : MotionSensitivity <= 0.3
-                           ? "Low — only large movements trigger."
-                           : "Balanced.");
+            return $"Triggers when ≥{trigger:F2}% of pixels differ from background. " +
+                   (MotionSensitivity >= 0.97
+                       ? "Very high — fires on almost any change; expect false positives."
+                       : MotionSensitivity >= 0.7
+                           ? "High — sensitive to small movement."
+                           : MotionSensitivity <= 0.3
+                               ? "Low — only large movements trigger."
+                               : "Balanced.");
         }
     }
 

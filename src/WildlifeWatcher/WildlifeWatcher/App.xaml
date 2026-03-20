@@ -6,6 +6,7 @@
         <converters:BoolToCollapsedConverter x:Key="BoolToCollapsedConverter"/>
         <converters:BytesToBitmapConverter x:Key="BytesToBitmapConverter"/>
         <converters:FilePathToImageConverter x:Key="FilePathToImageConverter"/>
+        <converters:NullOrEmptyToCollapsedConverter x:Key="NullOrEmptyToCollapsedConverter"/>
 
         <!-- Inverse: true → Visible (for IsAnalyzing indicator) -->
         <BooleanToVisibilityConverter x:Key="BoolToVisibleConverter"/>

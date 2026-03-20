@@ -19,7 +19,7 @@ public class BackgroundModelService : IBackgroundModelService
     // File format v3: magic (4) + version (1) + W (4) + H (4) + savedAtTicks (8) + frameCount (4) + floats (W*H*4)
     private const int    FileMagic   = 0x57424D47; // "WBMG"
     private const byte   FileVersion = 3;
-    private const double StaleHours  = 1.0;
+    private const double StaleHours  = 2.0;
 
     private static string StatePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -30,6 +30,8 @@ public class BackgroundModelService : IBackgroundModelService
     private float[]? _foreground;
     private int _frameCount;
     private bool _skipGate;
+
+    public DateTime? SavedAt { get; private set; }
 
     public float[]? Foreground => _foreground;
     public int Width  => W;
@@ -71,6 +73,7 @@ public class BackgroundModelService : IBackgroundModelService
         }
 
         _frameCount++;
+        SavedAt = DateTime.UtcNow;
         TrainingProgressChanged?.Invoke(this, TrainingProgress);
     }
 
@@ -80,6 +83,7 @@ public class BackgroundModelService : IBackgroundModelService
         _foreground = null;
         _frameCount = 0;
         _skipGate   = false;
+        SavedAt     = null;
     }
 
     public void SaveState()
@@ -94,10 +98,13 @@ public class BackgroundModelService : IBackgroundModelService
         bw.Write(FileVersion);
         bw.Write(W);
         bw.Write(H);
-        bw.Write(DateTime.UtcNow.Ticks);
+        var now = DateTime.UtcNow;
+        bw.Write(now.Ticks);
         bw.Write(_frameCount);
         foreach (var f in _background)
             bw.Write(f);
+
+        SavedAt = now;
     }
 
     public bool LoadState()
@@ -126,7 +133,9 @@ public class BackgroundModelService : IBackgroundModelService
 
             _background = bg;
             _foreground = new float[W * H];
-            _frameCount = savedFrameCount; // resume from saved progress
+            _frameCount = savedFrameCount;
+            _skipGate   = true; // data is fresh enough — skip the adaptation wait
+            SavedAt     = savedAt;
             return true;
         }
         catch
