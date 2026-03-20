@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using WildlifeWatcher.Models;
 using WildlifeWatcher.Services.Interfaces;
 using WildlifeWatcher.ViewModels.Base;
@@ -17,6 +18,7 @@ public partial class GalleryViewModel : ViewModelBase
     private readonly ICaptureStorageService _captureStorage;
     private readonly ISettingsService       _settings;
     private readonly IBirdPhotoService      _birdPhotoService;
+    private readonly ILogger<GalleryViewModel> _logger;
     private List<SpeciesCardViewModel> _allSpecies = new();
     private SpeciesCardViewModel? _selectedSpecies;
     private int _photoFetchInProgress = 0; // 0 = idle, 1 = running (Interlocked flag)
@@ -49,11 +51,12 @@ public partial class GalleryViewModel : ViewModelBase
     public ObservableCollection<CalendarDayViewModel>  CalendarDays        { get; } = new();
     public ObservableCollection<CaptureCardViewModel>  SelectedDayCaptures { get; } = new();
 
-    public GalleryViewModel(ICaptureStorageService captureStorage, ISettingsService settings, IBirdPhotoService birdPhotoService)
+    public GalleryViewModel(ICaptureStorageService captureStorage, ISettingsService settings, IBirdPhotoService birdPhotoService, ILogger<GalleryViewModel> logger)
     {
         _captureStorage   = captureStorage;
         _settings         = settings;
         _birdPhotoService = birdPhotoService;
+        _logger           = logger;
         _captureStorage.CaptureSaved += OnCaptureSaved;
     }
 
@@ -67,30 +70,29 @@ public partial class GalleryViewModel : ViewModelBase
     partial void OnSearchTextChanged(string value) => ApplyFilter();
     partial void OnSortModeChanged(GallerySortMode value) => ApplyFilter();
 
-    private void OnCaptureSaved(object? sender, CaptureRecord record)
+    private async void OnCaptureSaved(object? sender, CaptureRecord record)
     {
-        if (IsShowingSpeciesList)
-            Application.Current.Dispatcher.Invoke(() => _ = LoadAsync());
+        if (!IsShowingSpeciesList) return;
+        try { await Application.Current.Dispatcher.InvokeAsync(() => LoadAsync()).Task.Unwrap(); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to reload gallery after capture saved"); }
     }
 
     public async Task LoadAsync()
     {
-        var species = await _captureStorage.GetAllSpeciesWithCapturesAsync();
-        _allSpecies = species.Select(s => new SpeciesCardViewModel(s)).ToList();
+        var summaries = await _captureStorage.GetAllSpeciesSummariesAsync();
+        _allSpecies = summaries.Select(s => new SpeciesCardViewModel(s)).ToList();
         ApplyFilter();
 
         // Background: fetch iNaturalist reference photos for species that don't have one yet
-        var missing = species
+        var missing = summaries
             .Where(s => string.IsNullOrEmpty(s.ReferencePhotoPath) && !string.IsNullOrEmpty(s.ScientificName))
             .ToList();
 
         if (missing.Count > 0 && Interlocked.CompareExchange(ref _photoFetchInProgress, 1, 0) == 0)
-#pragma warning disable CS4014
             _ = Task.Run(() => FetchMissingPhotosAsync(missing));
-#pragma warning restore CS4014
     }
 
-    private async Task FetchMissingPhotosAsync(List<Species> missing)
+    private async Task FetchMissingPhotosAsync(List<SpeciesSummary> missing)
     {
         try
         {
@@ -100,16 +102,18 @@ public partial class GalleryViewModel : ViewModelBase
                 var path = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName);
                 if (path != null)
                 {
-                    await _captureStorage.UpdateSpeciesReferencePhotoAsync(s.Id, path);
+                    await _captureStorage.UpdateSpeciesReferencePhotoAsync(s.SpeciesId, path);
                     anyUpdated = true;
                 }
                 await Task.Delay(1100);
             }
 
             if (anyUpdated)
-#pragma warning disable CS4014
-                Application.Current.Dispatcher.Invoke(() => _ = LoadAsync());
-#pragma warning restore CS4014
+                await Application.Current.Dispatcher.InvokeAsync(() => LoadAsync()).Task.Unwrap();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch missing reference photos");
         }
         finally
         {
@@ -123,15 +127,15 @@ public partial class GalleryViewModel : ViewModelBase
         var filtered = string.IsNullOrEmpty(q)
             ? _allSpecies
             : _allSpecies.Where(s =>
-                s.Species.CommonName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                s.Species.ScientificName.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+                s.Summary.CommonName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                s.Summary.ScientificName.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
 
         var sorted = SortMode switch
         {
-            GallerySortMode.LatinNameAZ   => filtered.OrderBy(s => s.Species.ScientificName),
+            GallerySortMode.LatinNameAZ   => filtered.OrderBy(s => s.Summary.ScientificName),
             GallerySortMode.LatestCapture => filtered.OrderByDescending(s => s.LatestCaptureAt),
             GallerySortMode.TotalCaptures => filtered.OrderByDescending(s => s.CaptureCount),
-            _                             => filtered.OrderBy(s => s.Species.CommonName),
+            _                             => filtered.OrderBy(s => s.Summary.CommonName),
         };
 
         FilteredSpecies.Clear();
@@ -156,9 +160,9 @@ public partial class GalleryViewModel : ViewModelBase
     private async Task OpenSpecies(SpeciesCardViewModel card)
     {
         _selectedSpecies               = card;
-        SelectedSpeciesName            = card.Species.CommonName;
-        SelectedSpeciesScientificName  = card.Species.ScientificName;
-        await LoadCapturesAsync(card.Species.Id);
+        SelectedSpeciesName            = card.Summary.CommonName;
+        SelectedSpeciesScientificName  = card.Summary.ScientificName;
+        await LoadCapturesAsync(card.Summary.SpeciesId);
         CurrentView = GalleryView.SpeciesDetail;
     }
 
@@ -191,11 +195,11 @@ public partial class GalleryViewModel : ViewModelBase
 
         if (CurrentView == GalleryView.SpeciesDetail && _selectedSpecies != null)
         {
-            var stillExists = _allSpecies.Any(s => s.Species.Id == _selectedSpecies.Species.Id);
+            var stillExists = _allSpecies.Any(s => s.Summary.SpeciesId == _selectedSpecies.Summary.SpeciesId);
             if (!stillExists)
                 CurrentView = GalleryView.SpeciesList;
             else
-                await LoadCapturesAsync(_selectedSpecies.Species.Id);
+                await LoadCapturesAsync(_selectedSpecies.Summary.SpeciesId);
         }
     }
 
@@ -257,11 +261,12 @@ public partial class GalleryViewModel : ViewModelBase
     {
         var dialog = new CaptureDetailDialog(card.Record, _captureStorage);
         dialog.ShowDialog();
-        // Refresh calendar after dialog closes
+        var savedDate = SelectedDate;
         await LoadCalendarAsync();
-        if (SelectedDate.HasValue)
+        if (savedDate.HasValue)
         {
-            var captures = await _captureStorage.GetCapturesByDateAsync(SelectedDate.Value);
+            SelectedDate = savedDate;
+            var captures = await _captureStorage.GetCapturesByDateAsync(savedDate.Value);
             SelectedDayCaptures.Clear();
             foreach (var c in captures)
                 SelectedDayCaptures.Add(new CaptureCardViewModel(c));
@@ -275,7 +280,7 @@ public partial class GalleryViewModel : ViewModelBase
         SelectedDate = null;
         SelectedDayCaptures.Clear();
 
-        var counts = await _captureStorage.GetCaptureDateCountsForMonthAsync(CalendarYear, CalendarMonth);
+        var summaries = await _captureStorage.GetCaptureDailySummaryForMonthAsync(CalendarYear, CalendarMonth);
 
         var firstDay    = new DateTime(CalendarYear, CalendarMonth, 1);
         var daysInMonth = DateTime.DaysInMonth(CalendarYear, CalendarMonth);
@@ -290,8 +295,8 @@ public partial class GalleryViewModel : ViewModelBase
         for (int day = 1; day <= daysInMonth; day++)
         {
             var date = new DateTime(CalendarYear, CalendarMonth, day);
-            counts.TryGetValue(date, out var count);
-            CalendarDays.Add(new CalendarDayViewModel(date, count));
+            summaries.TryGetValue(date, out var summary);
+            CalendarDays.Add(new CalendarDayViewModel(date, summary?.Count ?? 0, summary?.WeatherCondition));
         }
 
         OnPropertyChanged(nameof(CalendarMonthLabel));

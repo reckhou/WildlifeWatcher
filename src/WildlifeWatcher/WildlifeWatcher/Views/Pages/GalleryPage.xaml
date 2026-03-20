@@ -3,190 +3,210 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="#F5F5F0">
 
-    <Grid>
-        <!-- ══ Species list view ══ -->
-        <DockPanel Visibility="{Binding IsShowingSpeciesList,
-                               Converter={StaticResource BoolToVisibleConverter}}">
+    <DockPanel>
 
-            <!-- Toolbar -->
-            <Border DockPanel.Dock="Top" Background="White" Padding="16,10"
-                    BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Gallery" Grid.Column="0"
-                               FontSize="22" FontWeight="Bold" Foreground="#2D5A27"
-                               VerticalAlignment="Center"/>
-
-                    <!-- View toggle: Species / Calendar -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                VerticalAlignment="Center" Margin="0,0,12,0">
-                        <Button Content="Species" Command="{Binding ShowSpeciesListCommand}"
-                                Padding="10,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
-                                BorderThickness="1">
-                            <Button.Style>
-                                <Style TargetType="Button">
+        <!-- ════ Persistent top bar: Species / Calendar toggle ════ -->
+        <Border DockPanel.Dock="Top" Background="White" Padding="8,8"
+                BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Content="Species" Command="{Binding ShowSpeciesListCommand}"
+                        Padding="10,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
+                        BorderThickness="1">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="White"/>
+                            <Setter Property="Foreground" Value="#555"/>
+                            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsShowingCalendarView}" Value="False">
                                     <Setter Property="Background" Value="#2D5A27"/>
                                     <Setter Property="Foreground" Value="White"/>
                                     <Setter Property="BorderBrush" Value="#2D5A27"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsShowingSpeciesList}" Value="False">
-                                            <Setter Property="Background" Value="White"/>
-                                            <Setter Property="Foreground" Value="#555"/>
-                                            <Setter Property="BorderBrush" Value="#CCCCCC"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Content="Calendar" Command="{Binding ShowCalendarCommand}"
-                                Padding="10,4" FontSize="11" Cursor="Hand" Margin="0,0,8,0"
-                                BorderThickness="1">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background" Value="White"/>
-                                    <Setter Property="Foreground" Value="#555"/>
-                                    <Setter Property="BorderBrush" Value="#CCCCCC"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsShowingCalendarView}" Value="True">
-                                            <Setter Property="Background" Value="#2D5A27"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Setter Property="BorderBrush" Value="#2D5A27"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                    </StackPanel>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="Calendar" Command="{Binding ShowCalendarCommand}"
+                        Padding="10,4" FontSize="11" Cursor="Hand"
+                        BorderThickness="1">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="White"/>
+                            <Setter Property="Foreground" Value="#555"/>
+                            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsShowingCalendarView}" Value="True">
+                                    <Setter Property="Background" Value="#2D5A27"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="BorderBrush" Value="#2D5A27"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+        </Border>
 
-                    <!-- Sort buttons -->
-                    <StackPanel Grid.Column="2" Orientation="Horizontal"
-                                VerticalAlignment="Center" Margin="0,0,12,0">
-                        <Button Content="Name ▲"
-                                Command="{Binding SortCommand}" CommandParameter="NameAZ"
-                                Padding="8,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
-                                BorderThickness="1">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background" Value="White"/>
-                                    <Setter Property="Foreground" Value="#555"/>
-                                    <Setter Property="BorderBrush" Value="#CCCCCC"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SortMode}" Value="NameAZ">
-                                            <Setter Property="Background" Value="#2D5A27"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Setter Property="BorderBrush" Value="#2D5A27"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Content="Latin ▲"
-                                Command="{Binding SortCommand}" CommandParameter="LatinNameAZ"
-                                Padding="8,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
-                                BorderThickness="1">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background" Value="White"/>
-                                    <Setter Property="Foreground" Value="#555"/>
-                                    <Setter Property="BorderBrush" Value="#CCCCCC"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SortMode}" Value="LatinNameAZ">
-                                            <Setter Property="Background" Value="#2D5A27"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Setter Property="BorderBrush" Value="#2D5A27"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Content="Latest ▼"
-                                Command="{Binding SortCommand}" CommandParameter="LatestCapture"
-                                Padding="8,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
-                                BorderThickness="1">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background" Value="White"/>
-                                    <Setter Property="Foreground" Value="#555"/>
-                                    <Setter Property="BorderBrush" Value="#CCCCCC"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SortMode}" Value="LatestCapture">
-                                            <Setter Property="Background" Value="#2D5A27"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Setter Property="BorderBrush" Value="#2D5A27"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Content="Count ▼"
-                                Command="{Binding SortCommand}" CommandParameter="TotalCaptures"
-                                Padding="8,4" FontSize="11" Cursor="Hand"
-                                BorderThickness="1">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background" Value="White"/>
-                                    <Setter Property="Foreground" Value="#555"/>
-                                    <Setter Property="BorderBrush" Value="#CCCCCC"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SortMode}" Value="TotalCaptures">
-                                            <Setter Property="Background" Value="#2D5A27"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Setter Property="BorderBrush" Value="#2D5A27"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                    </StackPanel>
+        <!-- ════ View panels (overlapping via Visibility) ════ -->
+        <Grid>
 
-                    <Button Grid.Column="3"
-                            Content="🗑 Reset Gallery"
-                            Command="{Binding ResetGalleryCommand}"
-                            Background="#C0392B" Foreground="White"
-                            BorderThickness="0" Padding="10,5"
-                            Cursor="Hand" FontSize="12"
-                            VerticalAlignment="Center" Margin="0,0,8,0"
-                            ToolTip="Delete all captures and start fresh"/>
-                    <TextBox Grid.Column="4"
-                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Width="200" Padding="8,5" FontSize="12"
-                             VerticalAlignment="Center"
-                             BorderBrush="#CCCCCC"/>
-                </Grid>
-            </Border>
+            <!-- ══ Species list view ══ -->
+            <DockPanel Visibility="{Binding IsShowingSpeciesList,
+                                   Converter={StaticResource BoolToVisibleConverter}}">
 
-            <!-- Empty state -->
-            <TextBlock DockPanel.Dock="Top"
-                       Text="No captures yet. Connect a camera and start watching!"
-                       FontSize="14" Foreground="#888"
-                       HorizontalAlignment="Center" Margin="0,40,0,0">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="Visibility" Value="Collapsed"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding FilteredSpecies.Count}" Value="0">
-                                <Setter Property="Visibility" Value="Visible"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
+                <!-- Toolbar: sort, reset, search -->
+                <Border DockPanel.Dock="Top" Background="White" Padding="16,8"
+                        BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-            <!-- Species grid -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding FilteredSpecies}" Margin="16,12">
-                    <ItemsControl.ItemsPanel>
+                        <!-- Sort buttons -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="Name ▲"
+                                    Command="{Binding SortCommand}" CommandParameter="NameAZ"
+                                    Padding="8,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
+                                    BorderThickness="1">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="White"/>
+                                        <Setter Property="Foreground" Value="#555"/>
+                                        <Setter Property="BorderBrush" Value="#CCCCCC"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SortMode}" Value="NameAZ">
+                                                <Setter Property="Background" Value="#2D5A27"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                                <Setter Property="BorderBrush" Value="#2D5A27"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Content="Latin ▲"
+                                    Command="{Binding SortCommand}" CommandParameter="LatinNameAZ"
+                                    Padding="8,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
+                                    BorderThickness="1">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="White"/>
+                                        <Setter Property="Foreground" Value="#555"/>
+                                        <Setter Property="BorderBrush" Value="#CCCCCC"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SortMode}" Value="LatinNameAZ">
+                                                <Setter Property="Background" Value="#2D5A27"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                                <Setter Property="BorderBrush" Value="#2D5A27"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Content="Latest ▼"
+                                    Command="{Binding SortCommand}" CommandParameter="LatestCapture"
+                                    Padding="8,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
+                                    BorderThickness="1">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="White"/>
+                                        <Setter Property="Foreground" Value="#555"/>
+                                        <Setter Property="BorderBrush" Value="#CCCCCC"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SortMode}" Value="LatestCapture">
+                                                <Setter Property="Background" Value="#2D5A27"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                                <Setter Property="BorderBrush" Value="#2D5A27"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Content="Count ▼"
+                                    Command="{Binding SortCommand}" CommandParameter="TotalCaptures"
+                                    Padding="8,4" FontSize="11" Cursor="Hand"
+                                    BorderThickness="1">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="White"/>
+                                        <Setter Property="Foreground" Value="#555"/>
+                                        <Setter Property="BorderBrush" Value="#CCCCCC"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SortMode}" Value="TotalCaptures">
+                                                <Setter Property="Background" Value="#2D5A27"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                                <Setter Property="BorderBrush" Value="#2D5A27"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                Content="🗑 Reset Gallery"
+                                Command="{Binding ResetGalleryCommand}"
+                                Background="#C0392B" Foreground="White"
+                                BorderThickness="0" Padding="10,5"
+                                Cursor="Hand" FontSize="12"
+                                VerticalAlignment="Center" Margin="0,0,8,0"
+                                ToolTip="Delete all captures and start fresh"/>
+                        <TextBox Grid.Column="2"
+                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="200" Padding="8,5" FontSize="12"
+                                 VerticalAlignment="Center"
+                                 BorderBrush="#CCCCCC"/>
+                    </Grid>
+                </Border>
+
+                <!-- Empty state -->
+                <TextBlock DockPanel.Dock="Top"
+                           Text="No captures yet. Connect a camera and start watching!"
+                           FontSize="14" Foreground="#888"
+                           HorizontalAlignment="Center" Margin="0,40,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding FilteredSpecies.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- Species grid (virtualized) -->
+                <ListBox ItemsSource="{Binding FilteredSpecies}" Margin="16,12"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         VirtualizingPanel.ScrollUnit="Pixel"
+                         SelectionMode="Single"
+                         HorizontalContentAlignment="Stretch">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <ContentPresenter/>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal"/>
                         </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Width="180" Margin="8" Background="White"
                                     CornerRadius="6" Cursor="Hand"
@@ -197,9 +217,6 @@
                                                             RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                   CommandParameter="{Binding}"/>
                                 </Border.InputBindings>
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.1"/>
-                                </Border.Effect>
                                 <StackPanel>
                                     <Image Height="120" Stretch="UniformToFill"
                                            Source="{Binding PreviewImagePath,
@@ -216,10 +233,10 @@
                                         </Image.Style>
                                     </Image>
                                     <StackPanel Margin="10,8">
-                                        <TextBlock Text="{Binding Species.CommonName}"
+                                        <TextBlock Text="{Binding Summary.CommonName}"
                                                    FontWeight="Bold" FontSize="12"
                                                    TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding Species.ScientificName}"
+                                        <TextBlock Text="{Binding Summary.ScientificName}"
                                                    FontStyle="Italic" FontSize="10"
                                                    Foreground="#888"
                                                    TextTrimming="CharacterEllipsis"/>
@@ -233,43 +250,60 @@
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </DockPanel>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
 
-        <!-- ══ Species detail view ══ -->
-        <DockPanel Visibility="{Binding IsShowingSpeciesDetail,
-                               Converter={StaticResource BoolToVisibleConverter}}">
+            <!-- ══ Species detail view ══ -->
+            <DockPanel Visibility="{Binding IsShowingSpeciesDetail,
+                                   Converter={StaticResource BoolToVisibleConverter}}">
 
-            <!-- Header -->
-            <Border DockPanel.Dock="Top" Background="White" Padding="16,10"
-                    BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="← Back" Command="{Binding BackCommand}"
-                            Background="Transparent" Foreground="#2D5A27"
-                            BorderThickness="0" Padding="0,0,16,0"
-                            Cursor="Hand" FontSize="13"/>
-                    <StackPanel>
-                        <TextBlock Text="{Binding SelectedSpeciesName}"
-                                   FontSize="20" FontWeight="Bold" Foreground="#2D5A27"/>
-                        <TextBlock Text="{Binding SelectedSpeciesScientificName}"
-                                   FontStyle="Italic" FontSize="12" Foreground="#888"/>
+                <!-- Header -->
+                <Border DockPanel.Dock="Top" Background="White" Padding="16,10"
+                        BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="← Back" Command="{Binding BackCommand}"
+                                Background="Transparent" Foreground="#2D5A27"
+                                BorderThickness="0" Padding="0,0,16,0"
+                                Cursor="Hand" FontSize="13"/>
+                        <StackPanel>
+                            <TextBlock Text="{Binding SelectedSpeciesName}"
+                                       FontSize="20" FontWeight="Bold" Foreground="#2D5A27"/>
+                            <TextBlock Text="{Binding SelectedSpeciesScientificName}"
+                                       FontStyle="Italic" FontSize="12" Foreground="#888"/>
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
-            </Border>
+                </Border>
 
-            <!-- Capture grid -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding SelectedCaptures}"
-                              VirtualizingPanel.IsVirtualizing="True"
-                              Margin="16,12">
-                    <ItemsControl.ItemsPanel>
+                <!-- Capture grid (virtualized) -->
+                <ListBox ItemsSource="{Binding SelectedCaptures}" Margin="16,12"
+                         Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         VirtualizingPanel.ScrollUnit="Pixel"
+                         SelectionMode="Single"
+                         HorizontalContentAlignment="Stretch">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <ContentPresenter/>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal"/>
                         </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Width="160" Margin="6" Background="White"
                                     CornerRadius="4" Cursor="Hand"
@@ -294,36 +328,18 @@
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </DockPanel>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
 
-        <!-- ══ Calendar view ══ -->
-        <DockPanel Visibility="{Binding IsShowingCalendarView,
-                               Converter={StaticResource BoolToVisibleConverter}}">
+            <!-- ══ Calendar view ══ -->
+            <DockPanel Visibility="{Binding IsShowingCalendarView,
+                                   Converter={StaticResource BoolToVisibleConverter}}">
 
-            <!-- Calendar header bar -->
-            <Border DockPanel.Dock="Top" Background="White" Padding="16,10"
-                    BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <!-- View toggle -->
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="Species" Command="{Binding ShowSpeciesListCommand}"
-                                Padding="10,4" FontSize="11" Cursor="Hand" Margin="0,0,4,0"
-                                Background="White" Foreground="#555"
-                                BorderThickness="1" BorderBrush="#CCCCCC"/>
-                        <Button Content="Calendar" Command="{Binding ShowCalendarCommand}"
-                                Padding="10,4" FontSize="11" Cursor="Hand" Margin="0,0,16,0"
-                                Background="#2D5A27" Foreground="White"
-                                BorderThickness="1" BorderBrush="#2D5A27"/>
-
-                        <!-- Month navigation -->
+                <!-- Month navigation -->
+                <Border DockPanel.Dock="Top" Background="White" Padding="16,10"
+                        BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <Button Content="‹" Command="{Binding NavigateCalendarBackCommand}"
                                 Background="Transparent" BorderThickness="1" BorderBrush="#CCCCCC"
                                 Padding="8,4" FontSize="14" Cursor="Hand" Margin="0,0,4,0"/>
@@ -335,111 +351,127 @@
                                 Background="Transparent" BorderThickness="1" BorderBrush="#CCCCCC"
                                 Padding="8,4" FontSize="14" Cursor="Hand" Margin="4,0,0,0"/>
                     </StackPanel>
-                </Grid>
-            </Border>
+                </Border>
 
-            <!-- Day-of-week headers (Mon–Sun) -->
-            <UniformGrid DockPanel.Dock="Top" Columns="7"
-                         Background="#E8F0E8" Margin="0,0,0,0">
-                <TextBlock Text="Mon" TextAlignment="Center" FontSize="11" FontWeight="Bold"
-                           Foreground="#2D5A27" Padding="4,6"/>
-                <TextBlock Text="Tue" TextAlignment="Center" FontSize="11" FontWeight="Bold"
-                           Foreground="#2D5A27" Padding="4,6"/>
-                <TextBlock Text="Wed" TextAlignment="Center" FontSize="11" FontWeight="Bold"
-                           Foreground="#2D5A27" Padding="4,6"/>
-                <TextBlock Text="Thu" TextAlignment="Center" FontSize="11" FontWeight="Bold"
-                           Foreground="#2D5A27" Padding="4,6"/>
-                <TextBlock Text="Fri" TextAlignment="Center" FontSize="11" FontWeight="Bold"
-                           Foreground="#2D5A27" Padding="4,6"/>
-                <TextBlock Text="Sat" TextAlignment="Center" FontSize="11" FontWeight="Bold"
-                           Foreground="#2D5A27" Padding="4,6"/>
-                <TextBlock Text="Sun" TextAlignment="Center" FontSize="11" FontWeight="Bold"
-                           Foreground="#2D5A27" Padding="4,6"/>
-            </UniformGrid>
+                <!-- Day-of-week headers (Mon–Sun) -->
+                <UniformGrid DockPanel.Dock="Top" Columns="7" Background="#E8F0E8">
+                    <TextBlock Text="Mon" TextAlignment="Center" FontSize="11" FontWeight="Bold"
+                               Foreground="#2D5A27" Padding="4,6"/>
+                    <TextBlock Text="Tue" TextAlignment="Center" FontSize="11" FontWeight="Bold"
+                               Foreground="#2D5A27" Padding="4,6"/>
+                    <TextBlock Text="Wed" TextAlignment="Center" FontSize="11" FontWeight="Bold"
+                               Foreground="#2D5A27" Padding="4,6"/>
+                    <TextBlock Text="Thu" TextAlignment="Center" FontSize="11" FontWeight="Bold"
+                               Foreground="#2D5A27" Padding="4,6"/>
+                    <TextBlock Text="Fri" TextAlignment="Center" FontSize="11" FontWeight="Bold"
+                               Foreground="#2D5A27" Padding="4,6"/>
+                    <TextBlock Text="Sat" TextAlignment="Center" FontSize="11" FontWeight="Bold"
+                               Foreground="#2D5A27" Padding="4,6"/>
+                    <TextBlock Text="Sun" TextAlignment="Center" FontSize="11" FontWeight="Bold"
+                               Foreground="#2D5A27" Padding="4,6"/>
+                </UniformGrid>
 
-            <!-- Selected day captures strip (shown when a day is selected) -->
-            <Border DockPanel.Dock="Bottom"
-                    Visibility="{Binding SelectedDate, Converter={StaticResource NullToCollapsedConverter}}"
-                    Background="White" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0"
-                    Padding="12,8">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedDateLabel}"
-                               FontSize="12" FontWeight="Bold" Foreground="#2D5A27"
-                               Margin="0,0,0,6"/>
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding SelectedDayCaptures}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Width="100" Margin="4,0" Background="White"
-                                            CornerRadius="4" Cursor="Hand"
-                                            BorderBrush="#E0E0E0" BorderThickness="1">
-                                        <Border.InputBindings>
-                                            <MouseBinding MouseAction="LeftClick"
-                                                          Command="{Binding DataContext.OpenDayCaptureCommand,
-                                                                    RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                          CommandParameter="{Binding}"/>
-                                        </Border.InputBindings>
-                                        <StackPanel>
-                                            <Image Height="70" Stretch="UniformToFill"
-                                                   Source="{Binding DisplayImagePath,
-                                                            Converter={StaticResource FilePathToImageConverter}}"
-                                                   ClipToBounds="True"/>
-                                            <TextBlock Text="{Binding TimeLabel}"
-                                                       FontSize="9" Foreground="#444"
-                                                       Margin="4,2" TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </DockPanel>
-            </Border>
+                <!-- Selected day captures strip (shown when a day is selected) -->
+                <Border DockPanel.Dock="Bottom"
+                        Visibility="{Binding SelectedDate, Converter={StaticResource NullToCollapsedConverter}}"
+                        Background="White" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0"
+                        Padding="12,8">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedDateLabel}"
+                                   FontSize="12" FontWeight="Bold" Foreground="#2D5A27"
+                                   Margin="0,0,0,6"/>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding SelectedDayCaptures}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="100" Margin="4,0" Background="White"
+                                                CornerRadius="4" Cursor="Hand"
+                                                BorderBrush="#E0E0E0" BorderThickness="1">
+                                            <Border.InputBindings>
+                                                <MouseBinding MouseAction="LeftClick"
+                                                              Command="{Binding DataContext.OpenDayCaptureCommand,
+                                                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              CommandParameter="{Binding}"/>
+                                            </Border.InputBindings>
+                                            <StackPanel>
+                                                <Image Height="70" Stretch="UniformToFill"
+                                                       Source="{Binding DisplayImagePath,
+                                                                Converter={StaticResource FilePathToImageConverter}}"
+                                                       ClipToBounds="True"/>
+                                                <TextBlock Text="{Binding TimeLabel}"
+                                                           FontSize="9" Foreground="#444"
+                                                           Margin="4,2" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
 
-            <!-- Calendar grid -->
-            <ItemsControl ItemsSource="{Binding CalendarDays}" Margin="0">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <UniformGrid Columns="7"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="{Binding HeatColor}" MinHeight="56" Margin="1"
-                                Cursor="Hand">
-                            <Border.InputBindings>
-                                <MouseBinding MouseAction="LeftClick"
-                                              Command="{Binding DataContext.SelectDateCommand,
-                                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              CommandParameter="{Binding}"/>
-                            </Border.InputBindings>
-                            <!-- Today ring -->
-                            <Border BorderBrush="#2D5A27" BorderThickness="2"
-                                    Visibility="{Binding IsToday,
-                                                 Converter={StaticResource BoolToVisibleConverter}}">
-                                <StackPanel Margin="4,4">
-                                    <TextBlock Text="{Binding DayNumber,
-                                                      Converter={StaticResource ZeroToEmptyStringConverter}}"
-                                               FontSize="12" FontWeight="SemiBold"
-                                               Foreground="#333"/>
-                                    <TextBlock Text="{Binding CaptureCount,
-                                                      Converter={StaticResource ZeroToEmptyStringConverter}}"
-                                               FontSize="10" Foreground="#2D5A27"
-                                               Visibility="{Binding CaptureCount,
-                                                            Converter={StaticResource ZeroToCollapsedConverter}}"/>
-                                </StackPanel>
+                <!-- Calendar grid -->
+                <ItemsControl ItemsSource="{Binding CalendarDays}" Margin="0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="7"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{Binding HeatColor}" MinHeight="56" Margin="1"
+                                    BorderBrush="#CCCCCC" BorderThickness="1"
+                                    Cursor="Hand">
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftClick"
+                                                  Command="{Binding DataContext.SelectDateCommand,
+                                                            RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  CommandParameter="{Binding}"/>
+                                </Border.InputBindings>
+                                <!-- Today ring / day content — hidden for blank offset cells -->
+                                <Border BorderThickness="2">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#2D5A27"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsBlank}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel Margin="4,4">
+                                        <TextBlock Text="{Binding DayNumber,
+                                                          Converter={StaticResource ZeroToEmptyStringConverter}}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="#333"/>
+                                        <TextBlock Text="{Binding CaptureCount,
+                                                          Converter={StaticResource ZeroToEmptyStringConverter}}"
+                                                   FontSize="10" Foreground="#2D5A27"
+                                                   Visibility="{Binding CaptureCount,
+                                                                Converter={StaticResource ZeroToCollapsedConverter}}"/>
+                                        <TextBlock Text="{Binding WeatherCondition}"
+                                                   FontSize="9" Foreground="#666"
+                                                   TextWrapping="Wrap"
+                                                   Visibility="{Binding HasWeather,
+                                                                Converter={StaticResource BoolToVisibleConverter}}"/>
+                                    </StackPanel>
+                                </Border>
                             </Border>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-        </DockPanel>
-    </Grid>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
 </UserControl>

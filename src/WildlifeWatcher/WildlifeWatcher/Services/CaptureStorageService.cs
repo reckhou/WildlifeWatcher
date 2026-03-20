@@ -45,9 +45,9 @@ public class CaptureStorageService : ICaptureStorageService
             var latestCapture = await checkDb.CaptureRecords
                 .Where(c =>
                     c.CapturedAt < batchCutoff &&
-                    (c.Species.CommonName.ToLower() == result.CommonName.ToLower() ||
+                    (EF.Functions.Collate(c.Species.CommonName, "NOCASE") == result.CommonName ||
                      (!string.IsNullOrEmpty(result.ScientificName) &&
-                      c.Species.ScientificName.ToLower() == result.ScientificName.ToLower())))
+                      EF.Functions.Collate(c.Species.ScientificName, "NOCASE") == result.ScientificName)))
                 .OrderByDescending(c => c.CapturedAt)
                 .Select(c => (DateTime?)c.CapturedAt)
                 .FirstOrDefaultAsync();
@@ -64,10 +64,11 @@ public class CaptureStorageService : ICaptureStorageService
             }
         }
 
+        var now        = DateTime.Now;
         var captureDir = ResolveCapturesDir(_settings.CurrentSettings.CapturesDirectory);
         var safeName   = string.Concat(result.CommonName.Split(Path.GetInvalidFileNameChars()))
                                .Replace(' ', '_');
-        var baseName   = $"{safeName}_{DateTime.Now:yyyyMMdd_HHmmss}";
+        var baseName   = $"{safeName}_{now:yyyyMMdd_HHmmss}";
         var fileName   = $"{baseName}.jpg";
         var filePath   = Path.Combine(captureDir, fileName);
 
@@ -103,11 +104,11 @@ public class CaptureStorageService : ICaptureStorageService
         await using var db = await _dbFactory.CreateDbContextAsync();
 
         var species = await db.Species
-            .FirstOrDefaultAsync(s => s.CommonName.ToLower() == result.CommonName.ToLower());
+            .FirstOrDefaultAsync(s => EF.Functions.Collate(s.CommonName, "NOCASE") == result.CommonName);
 
         if (species == null && !string.IsNullOrEmpty(result.ScientificName))
             species = await db.Species
-                .FirstOrDefaultAsync(s => s.ScientificName.ToLower() == result.ScientificName.ToLower());
+                .FirstOrDefaultAsync(s => EF.Functions.Collate(s.ScientificName, "NOCASE") == result.ScientificName);
 
         if (species == null)
         {
@@ -116,7 +117,7 @@ public class CaptureStorageService : ICaptureStorageService
                 CommonName      = result.CommonName,
                 ScientificName  = result.ScientificName,
                 Description     = result.Description,
-                FirstDetectedAt = DateTime.Now
+                FirstDetectedAt = now
             };
             db.Species.Add(species);
             await db.SaveChangesAsync();
@@ -133,7 +134,7 @@ public class CaptureStorageService : ICaptureStorageService
         var record = new CaptureRecord
         {
             SpeciesId              = species.Id,
-            CapturedAt             = DateTime.Now,
+            CapturedAt             = now,
             ImageFilePath          = filePath,
             AiRawResponse          = result.RawResponse,
             ConfidenceScore        = result.Confidence,
@@ -167,12 +168,21 @@ public class CaptureStorageService : ICaptureStorageService
         await db.Species.ExecuteDeleteAsync();
     }
 
-    public async Task<IReadOnlyList<Species>> GetAllSpeciesWithCapturesAsync()
+    public async Task<IReadOnlyList<SpeciesSummary>> GetAllSpeciesSummariesAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         return await db.Species
-            .Include(s => s.Captures)
             .Where(s => s.Captures.Any())
+            .Select(s => new SpeciesSummary(
+                s.Id,
+                s.CommonName,
+                s.ScientificName,
+                s.Description,
+                s.FirstDetectedAt,
+                s.ReferencePhotoPath,
+                s.Captures.Count,
+                s.Captures.Max(c => c.CapturedAt),
+                s.Captures.OrderByDescending(c => c.CapturedAt).Select(c => c.ImageFilePath).FirstOrDefault()))
             .ToListAsync();
     }
 
@@ -251,26 +261,34 @@ public class CaptureStorageService : ICaptureStorageService
             }
 
             db.Species.RemoveRange(duplicates);
-            await db.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Merged {Count} duplicate(s) of '{Name}' (ScientificName: {Sci}) into species id={Id}",
                 duplicates.Count, canonical.CommonName, canonical.ScientificName, canonical.Id);
         }
+
+        if (groups.Count > 0)
+            await db.SaveChangesAsync();
     }
 
-    public async Task<Dictionary<DateTime, int>> GetCaptureDateCountsForMonthAsync(int year, int month)
+    public async Task<Dictionary<DateTime, DailySummary>> GetCaptureDailySummaryForMonthAsync(int year, int month)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         var start = new DateTime(year, month, 1);
         var end   = start.AddMonths(1);
 
-        var dates = await db.CaptureRecords
+        var rows = await db.CaptureRecords
             .Where(c => c.CapturedAt >= start && c.CapturedAt < end)
-            .Select(c => c.CapturedAt.Date)
+            .Select(c => new { c.CapturedAt, c.WeatherCondition })
             .ToListAsync();
 
-        return dates.GroupBy(d => d).ToDictionary(g => g.Key, g => g.Count());
+        return rows
+            .GroupBy(c => c.CapturedAt.Date)
+            .ToDictionary(
+                g => g.Key,
+                g => new DailySummary(
+                    g.Count(),
+                    g.Select(c => c.WeatherCondition).FirstOrDefault(w => w != null)));
     }
 
     public async Task<IReadOnlyList<CaptureRecord>> GetCapturesByDateAsync(DateTime date)
@@ -402,7 +420,7 @@ public class CaptureStorageService : ICaptureStorageService
         return outMs.ToArray();
     }
 
-    private static string ResolveCapturesDir(string configured)
+    internal static string ResolveCapturesDir(string configured)
     {
         var dir = configured;
         if (!Path.IsPathRooted(dir))
