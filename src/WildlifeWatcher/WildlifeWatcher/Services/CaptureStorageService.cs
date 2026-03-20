@@ -46,7 +46,7 @@ public class CaptureStorageService : ICaptureStorageService
         if (poiRegions is { Count: > 0 })
         {
             var speciesLabel   = $"{result.CommonName} ({result.Confidence:P0})";
-            var annotatedBytes = DrawPoiOverlay(jpegBytes, poiRegions, speciesLabel, result.SourcePoiIndex);
+            var annotatedBytes = await DrawPoiOverlay(jpegBytes, poiRegions, speciesLabel, result.SourcePoiIndex);
             annotatedPath      = Path.Combine(captureDir, $"{baseName}_annotated.jpg");
             await File.WriteAllBytesAsync(annotatedPath, annotatedBytes);
             _logger.LogInformation("Annotated capture saved: {Path}", annotatedPath);
@@ -54,9 +54,10 @@ public class CaptureStorageService : ICaptureStorageService
             foreach (var poi in poiRegions)
             {
                 bool isSource = result.SourcePoiIndex == null || poi.Index == result.SourcePoiIndex;
-                var cropBytes = isSource
-                    ? LabelCropJpeg(poi.CroppedJpeg, speciesLabel)
-                    : poi.CroppedJpeg;
+                var cropLabel = isSource
+                    ? speciesLabel
+                    : $"POI {poi.Index} — Sent to AI (not matched)";
+                var cropBytes = await LabelCropJpeg(poi.CroppedJpeg, cropLabel);
                 var cropPath  = Path.Combine(captureDir, $"{baseName}_poi_{poi.Index}.jpg");
                 await File.WriteAllBytesAsync(cropPath, cropBytes);
             }
@@ -159,9 +160,9 @@ public class CaptureStorageService : ICaptureStorageService
         await db.SaveChangesAsync();
     }
 
-    private static byte[] DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)
+    private static async Task<byte[]> DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)
     {
-        return Application.Current.Dispatcher.Invoke(() =>
+        return await Application.Current.Dispatcher.InvokeAsync(() =>
         {
             using var ms = new MemoryStream(jpegBytes);
             var source   = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
@@ -219,9 +220,9 @@ public class CaptureStorageService : ICaptureStorageService
         });
     }
 
-    private static byte[] LabelCropJpeg(byte[] jpegCrop, string label)
+    internal static async Task<byte[]> LabelCropJpeg(byte[] jpegCrop, string label)
     {
-        return Application.Current.Dispatcher.Invoke(() =>
+        return await Application.Current.Dispatcher.InvokeAsync(() =>
         {
             using var ms = new MemoryStream(jpegCrop);
             var source   = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
@@ -267,6 +268,7 @@ public class CaptureStorageService : ICaptureStorageService
     {
         using var ms  = new MemoryStream(pngBytes);
         var frame     = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        frame.Freeze();
         var encoder   = new JpegBitmapEncoder { QualityLevel = quality };
         encoder.Frames.Add(BitmapFrame.Create(frame));
         using var outMs = new MemoryStream();

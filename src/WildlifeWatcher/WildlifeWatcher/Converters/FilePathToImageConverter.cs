@@ -18,7 +18,8 @@ public class FilePathToImageConverter : IValueConverter
             img.BeginInit();
             img.UriSource        = new Uri(path, UriKind.Absolute);
             img.CacheOption      = BitmapCacheOption.OnLoad;
-            img.DecodePixelWidth = 200;
+            img.DecodePixelWidth  = 200;
+            img.DecodePixelHeight = 200;
             img.EndInit();
             img.Freeze();
             return img;

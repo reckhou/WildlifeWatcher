@@ -172,7 +172,7 @@ public class PointOfInterestService : IPointOfInterestService
             regions.Add(new PoiRegion(
                 (double)cx1 / imgW, (double)cy1 / imgH,
                 (double)cropW / imgW, (double)cropH / imgH,
-                croppedJpeg, i + 1));
+                croppedJpeg, regions.Count + 1));
         }
 
         return regions;
@@ -183,12 +183,15 @@ public class PointOfInterestService : IPointOfInterestService
     private static byte[] CropAndEncode(BitmapSource source, int x, int y, int w, int h)
     {
         var cropped  = new CroppedBitmap(source, new Int32Rect(x, y, w, h));
+        cropped.Freeze();
         BitmapSource toEncode = cropped;
 
         if (w > CropMaxDimension || h > CropMaxDimension)
         {
-            var scale = Math.Min((double)CropMaxDimension / w, (double)CropMaxDimension / h);
-            toEncode  = new TransformedBitmap(cropped, new ScaleTransform(scale, scale));
+            var scale    = Math.Min((double)CropMaxDimension / w, (double)CropMaxDimension / h);
+            var scaled   = new TransformedBitmap(cropped, new ScaleTransform(scale, scale));
+            scaled.Freeze();
+            toEncode     = scaled;
         }
 
         var encoder = new JpegBitmapEncoder { QualityLevel = 85 };

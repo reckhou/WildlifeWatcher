@@ -11,8 +11,9 @@ public class BytesToBitmapConverter : IValueConverter
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is not byte[] bytes || bytes.Length == 0) return null;
+        using var ms = new MemoryStream(bytes);
         var bitmap = BitmapFrame.Create(
-            new MemoryStream(bytes),
+            ms,
             BitmapCreateOptions.None,
             BitmapCacheOption.OnLoad);
         bitmap.Freeze();

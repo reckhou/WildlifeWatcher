@@ -158,6 +158,7 @@ public class ClaudeRecognitionService : IAiRecognitionService
             var scale = Math.Min((double)MaxDimension / bitmap.PixelWidth,
                                  (double)MaxDimension / bitmap.PixelHeight);
             source    = new TransformedBitmap(bitmap, new ScaleTransform(scale, scale));
+            source.Freeze();
         }
 
         var encoder = new JpegBitmapEncoder { QualityLevel = 85 };

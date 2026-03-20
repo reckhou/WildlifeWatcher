@@ -149,8 +149,9 @@ public class BackgroundModelService : IBackgroundModelService
 
     private static byte[] ToGrayPixels(byte[] pngBytes)
     {
+        using var pngStream = new MemoryStream(pngBytes);
         var source = BitmapFrame.Create(
-            new MemoryStream(pngBytes),
+            pngStream,
             BitmapCreateOptions.None,
             BitmapCacheOption.OnLoad);
 

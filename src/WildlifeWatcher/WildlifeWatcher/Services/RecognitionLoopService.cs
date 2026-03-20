@@ -138,8 +138,12 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
         // ── Debug mode: save POIs locally, skip AI ───────────────────────
         if (IsDebugMode)
         {
-            _logger.LogInformation("Debug mode: saving {Count} POI(s) to disk, skipping AI", poiRegions.Count);
-            await SaveDebugPoiAsync(currentFrame, poiRegions, settings, ct);
+            bool inCooldown   = DateTime.UtcNow < _cooldownUntil;
+            var  poiLabel     = inCooldown
+                ? $"NOT sent to AI (cooldown — {(_cooldownUntil - DateTime.UtcNow).TotalSeconds:F0}s remaining)"
+                : "Would be sent to AI (debug mode — AI skipped)";
+            _logger.LogInformation("Debug mode: saving {Count} POI(s) [{Label}]", poiRegions.Count, poiLabel);
+            await SaveDebugPoiAsync(currentFrame, poiRegions, settings, poiLabel, ct);
             return;
         }
 
@@ -207,6 +211,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
         byte[] framePng,
         IReadOnlyList<PoiRegion> poiRegions,
         AppConfiguration settings,
+        string poiLabel,
         CancellationToken ct)
     {
         try
@@ -221,8 +226,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
 
             foreach (var poi in poiRegions)
             {
+                var labeled = await CaptureStorageService.LabelCropJpeg(poi.CroppedJpeg, $"POI {poi.Index} — {poiLabel}");
                 var poiPath = Path.Combine(captureDir, $"{baseName}_poi_{poi.Index}.jpg");
-                await File.WriteAllBytesAsync(poiPath, poi.CroppedJpeg, ct);
+                await File.WriteAllBytesAsync(poiPath, labeled, ct);
             }
             if (poiRegions.Count > 0)
                 _logger.LogInformation("Debug: saved {Count} POI crop(s) for {Base}", poiRegions.Count, baseName);
