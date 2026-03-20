@@ -44,11 +44,19 @@ jobs:
         run: Compress-Archive -Path ./publish/* -DestinationPath ./WildlifeWatcher-${{ github.ref_name }}-win-x64.zip
         shell: pwsh
 
+      - name: Compute SHA256
+        run: |
+          $hash = (Get-FileHash ./WildlifeWatcher-${{ github.ref_name }}-win-x64.zip -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path ./WildlifeWatcher-${{ github.ref_name }}-win-x64.zip.sha256 -Value $hash -NoNewline
+        shell: pwsh
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Wildlife Watcher ${{ github.ref_name }}
-          files: WildlifeWatcher-${{ github.ref_name }}-win-x64.zip
+          files: |
+            WildlifeWatcher-${{ github.ref_name }}-win-x64.zip
+            WildlifeWatcher-${{ github.ref_name }}-win-x64.zip.sha256
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WildlifeWatcher.Models;
 using WildlifeWatcher.Services.Interfaces;
 
@@ -13,11 +14,13 @@ public class UpdateService : IUpdateService
 {
     private readonly IHttpClientFactory _httpFactory;
     private readonly ISettingsService   _settings;
+    private readonly ILogger<UpdateService> _logger;
 
-    public UpdateService(IHttpClientFactory httpFactory, ISettingsService settings)
+    public UpdateService(IHttpClientFactory httpFactory, ISettingsService settings, ILogger<UpdateService> logger)
     {
         _httpFactory = httpFactory;
         _settings    = settings;
+        _logger      = logger;
     }
 
     public async Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default)
@@ -55,19 +58,28 @@ public class UpdateService : IUpdateService
             var versionStr = tagName.TrimStart('v');
             if (!Version.TryParse(versionStr, out var latest)) return null;
 
-            string downloadUrl = string.Empty;
+            string downloadUrl  = string.Empty;
+            string sha256Url    = string.Empty;
             if (doc.RootElement.TryGetProperty("assets", out var assets))
             {
                 foreach (var asset in assets.EnumerateArray())
                 {
                     var name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                    {
-                        downloadUrl = asset.TryGetProperty("browser_download_url", out var u)
-                                      ? u.GetString() ?? string.Empty : string.Empty;
-                        break;
-                    }
+                    var url  = asset.TryGetProperty("browser_download_url", out var u)
+                               ? u.GetString() ?? string.Empty : string.Empty;
+                    if (name.EndsWith(".zip.sha256", StringComparison.OrdinalIgnoreCase))
+                        sha256Url = url;
+                    else if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                        downloadUrl = url;
                 }
+            }
+
+            // Fetch the hash (64 bytes) now so ApplyUpdate can verify without an extra round-trip
+            var sha256 = string.Empty;
+            if (!string.IsNullOrEmpty(sha256Url))
+            {
+                try   { sha256 = (await http.GetStringAsync(sha256Url, ct)).Trim(); }
+                catch { /* hash unavailable — verification will be skipped */ }
             }
 
             return new UpdateInfo
@@ -76,11 +88,13 @@ public class UpdateService : IUpdateService
                 LatestVersion  = latest,
                 TagName        = tagName,
                 DownloadUrl    = downloadUrl,
+                Sha256         = sha256,
                 ReleaseNotes   = notes
             };
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to check for updates");
             return null;
         }
     }
@@ -118,17 +132,35 @@ public class UpdateService : IUpdateService
             }
         }
 
+        // Verify integrity before extracting
+        if (!string.IsNullOrEmpty(update.Sha256))
+        {
+            await using var fs       = File.OpenRead(zipPath);
+            var hashBytes            = await System.Security.Cryptography.SHA256.HashDataAsync(fs, ct);
+            var actual               = Convert.ToHexString(hashBytes).ToLowerInvariant();
+            var expected             = update.Sha256.ToLowerInvariant();
+            if (actual != expected)
+            {
+                File.Delete(zipPath);
+                throw new InvalidOperationException(
+                    $"Integrity check failed — SHA256 mismatch.\nExpected: {expected}\nActual:   {actual}");
+            }
+            _logger.LogInformation("SHA256 verified OK: {Hash}", actual);
+        }
+
         ZipFile.ExtractToDirectory(zipPath, extractDir);
         progress.Report(100);
 
-        // Find the exe in the extracted folder
+        // Find the directory containing the exe
         var extractedExe = Directory.GetFiles(extractDir, "*.exe", SearchOption.AllDirectories)
                                     .FirstOrDefault() ?? Path.Combine(extractDir, "WildlifeWatcher.exe");
+        var extractedDir = Path.GetDirectoryName(extractedExe) ?? extractDir;
+        var appDir       = Path.GetDirectoryName(currentExe) ?? AppContext.BaseDirectory;
 
-        // Write PS1 updater script
+        // Write PS1 updater script — copies all files from extracted directory
         var script = $"""
             Start-Sleep -Seconds 3
-            Copy-Item -Path "{extractedExe}" -Destination "{currentExe}" -Force
+            Copy-Item -Path "{extractedDir}\*" -Destination "{appDir}" -Recurse -Force
             Start-Process "{currentExe}"
             """;
         await File.WriteAllTextAsync(scriptPath, script, ct);
