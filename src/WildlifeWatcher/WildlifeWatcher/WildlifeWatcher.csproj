@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>WildlifeWatcher</AssemblyName>
     <RootNamespace>WildlifeWatcher</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,6 +35,7 @@
 
     <!-- AI recognition (Phase 3) -->
     <PackageReference Include="Anthropic.SDK" Version="4.*" />
+    <PackageReference Include="Mscc.GenerativeAI" Version="2.*" />
   </ItemGroup>
 
 </Project>
