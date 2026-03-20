@@ -20,9 +20,8 @@ public class PointOfInterestService : IPointOfInterestService
     private const int ScaleWidth  = GridCols * 5; // 160
     private const int ScaleHeight = GridRows * 5; // 120
 
-    private const int    PixelThreshold   = 25;   // foreground intensity to count a pixel as changed
-    private const double CellHotFraction  = 0.06; // fraction of cell pixels that must be foreground
-    private const int    MinCellCount     = 1;    // minimum hot cells to form a region
+    private const double CellHotFraction  = 0.12; // fraction of cell pixels that must be foreground (3/25 px — was 0.06)
+    private const int    MinCellCount     = 2;    // minimum hot cells to form a region (was 1)
     private const double PadFraction      = 0.40; // padding added around tight bounding box
     private const double MaxBlobFraction  = 0.20; // skip tight bbox larger than 20% of frame in either dimension
     private const double MaxCropFraction  = 0.25; // clamp padded crop to 25% of frame in either dimension
@@ -30,7 +29,8 @@ public class PointOfInterestService : IPointOfInterestService
     private const int    MaxRegions       = 5;    // cap to avoid sending too many images
 
     public IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame,
-                                                     IReadOnlyList<MotionZone>? whitelistZones = null)
+                                                     IReadOnlyList<MotionZone>? whitelistZones = null,
+                                                     int pixelThreshold = 25)
     {
         // ── 1. Build hot-cell grid ──────────────────────────────────────────
         var hotCells = new bool[GridRows, GridCols];
@@ -44,7 +44,7 @@ public class PointOfInterestService : IPointOfInterestService
                 for (int px = 0; px < 5; px++)
                 {
                     int idx = (row * 5 + py) * ScaleWidth + (col * 5 + px);
-                    if (foreground[idx] > PixelThreshold) changed++;
+                    if (foreground[idx] > pixelThreshold) changed++;
                 }
                 hotCells[row, col] = changed >= cellPixels * CellHotFraction;
             }

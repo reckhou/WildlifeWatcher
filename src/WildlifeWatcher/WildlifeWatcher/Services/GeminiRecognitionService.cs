@@ -15,10 +15,10 @@ public class GeminiRecognitionService : IAiRecognitionService
         "This camera is mounted in a domestic garden, so the most commonly seen animals are domestic cats, dogs, and garden birds (robins, pigeons, sparrows, starlings, blackbirds, etc.). " +
         "Give strong preference to these species when the image is ambiguous — only identify as a rarer wild animal if the visual evidence clearly rules out cats, dogs, and birds. " +
         "Respond with strict JSON only — no markdown, no code fences. " +
-        "Format: {\"detected\":true,\"source_crop_index\":1,\"candidates\":[{\"common_name\":\"Domestic Cat\",\"scientific_name\":\"Felis catus\",\"confidence\":0.92,\"description\":\"...\"},{\"common_name\":\"Red Fox\",\"scientific_name\":\"Vulpes vulpes\",\"confidence\":0.05,\"description\":\"...\"}]} " +
-        "When multiple crop regions are sent, include \"source_crop_index\" (1-based integer) indicating which region the best match was found in. Omit source_crop_index for full-frame analysis. " +
-        "List up to 3 most likely animals in descending confidence order. " +
-        "If no animal is visible: {\"detected\":false,\"candidates\":[]}";
+        "Format: {\"detections\":[{\"source_crop_index\":1,\"detected\":true,\"candidates\":[{\"common_name\":\"Domestic Cat\",\"scientific_name\":\"Felis catus\",\"confidence\":0.92,\"description\":\"...\"},{\"common_name\":\"Red Fox\",\"scientific_name\":\"Vulpes vulpes\",\"confidence\":0.05,\"description\":\"...\"}]},{\"source_crop_index\":2,\"detected\":true,\"candidates\":[{\"common_name\":\"Robin\",\"scientific_name\":\"Erithacus rubecula\",\"confidence\":0.87,\"description\":\"...\"}]}]} " +
+        "Report one entry per crop region that contains an animal. For each detected animal, list up to 3 candidate species in descending confidence order. " +
+        "Omit source_crop_index when analysing a single full frame. " +
+        "If no animals are visible in any region: {\"detections\":[]}";
 
     private readonly ISettingsService _settings;
     private readonly ICredentialService _credentials;
@@ -34,7 +34,7 @@ public class GeminiRecognitionService : IAiRecognitionService
         _logger      = logger;
     }
 
-    public async Task<RecognitionResult> RecognizeAsync(
+    public async Task<IReadOnlyList<RecognitionResult>> RecognizeAsync(
         byte[] fullFramePng,
         IReadOnlyList<byte[]>? poiJpegs = null,
         CancellationToken ct = default)
@@ -43,7 +43,7 @@ public class GeminiRecognitionService : IAiRecognitionService
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             _logger.LogWarning("No Gemini API key configured; skipping AI recognition");
-            return new RecognitionResult(false, string.Empty, string.Empty, 0, string.Empty, string.Empty, Array.Empty<SpeciesCandidate>(), SourcePoiIndex: null);
+            return Array.Empty<RecognitionResult>();
         }
 
         var modelName = _settings.CurrentSettings.GeminiModel;
@@ -87,7 +87,7 @@ public class GeminiRecognitionService : IAiRecognitionService
         {
             var inner = ex.InnerException != null ? $" Inner: {ex.InnerException.Message}" : string.Empty;
             _logger.LogError("Gemini API error [{Type}]: {Message}.{Inner}", ex.GetType().Name, ex.Message, inner);
-            return new RecognitionResult(false, string.Empty, string.Empty, 0, string.Empty, ex.Message, Array.Empty<SpeciesCandidate>(), SourcePoiIndex: null);
+            return Array.Empty<RecognitionResult>();
         }
     }
 
@@ -108,8 +108,8 @@ public class GeminiRecognitionService : IAiRecognitionService
         parts.Add(new TextData
         {
             Text = "These are cropped regions from a garden wildlife camera. " +
-                   "Identify any wild animals visible across these images. " +
-                   "Report the best match found and include \"source_crop_index\" (1-based integer) for which region it appeared in, or detected:false if none are present."
+                   "Identify any wild animals visible in each region independently. " +
+                   "Report one detection entry per region that contains an animal."
         });
         return parts;
     }
@@ -141,7 +141,7 @@ public class GeminiRecognitionService : IAiRecognitionService
 
     // ── Response parsing ──────────────────────────────────────────────────
 
-    private static RecognitionResult ParseResponse(string raw)
+    private static IReadOnlyList<RecognitionResult> ParseResponse(string raw)
     {
         var json = raw.Trim();
         if (json.StartsWith("```"))
@@ -150,35 +150,44 @@ public class GeminiRecognitionService : IAiRecognitionService
         using var doc = JsonDocument.Parse(json);
         var root      = doc.RootElement;
 
-        bool detected = root.TryGetProperty("detected", out var det) && det.GetBoolean();
+        var results = new List<RecognitionResult>();
+        if (!root.TryGetProperty("detections", out var detectionsArr) || detectionsArr.ValueKind != JsonValueKind.Array)
+            return results;
 
-        var candidates = new List<SpeciesCandidate>();
-        if (root.TryGetProperty("candidates", out var cArr) && cArr.ValueKind == JsonValueKind.Array)
+        foreach (var det in detectionsArr.EnumerateArray())
         {
-            foreach (var c in cArr.EnumerateArray())
+            bool detected = det.TryGetProperty("detected", out var detProp) && detProp.GetBoolean();
+
+            var candidates = new List<SpeciesCandidate>();
+            if (det.TryGetProperty("candidates", out var cArr) && cArr.ValueKind == JsonValueKind.Array)
             {
-                candidates.Add(new SpeciesCandidate(
-                    CommonName:     c.TryGetProperty("common_name",     out var cn)   ? cn.GetString()   ?? string.Empty : string.Empty,
-                    ScientificName: c.TryGetProperty("scientific_name", out var sn)   ? sn.GetString()   ?? string.Empty : string.Empty,
-                    Confidence:     c.TryGetProperty("confidence",      out var conf) ? conf.GetDouble() : 0,
-                    Description:    c.TryGetProperty("description",     out var desc) ? desc.GetString() ?? string.Empty : string.Empty));
+                foreach (var c in cArr.EnumerateArray())
+                {
+                    candidates.Add(new SpeciesCandidate(
+                        CommonName:     c.TryGetProperty("common_name",     out var cn)   ? cn.GetString()   ?? string.Empty : string.Empty,
+                        ScientificName: c.TryGetProperty("scientific_name", out var sn)   ? sn.GetString()   ?? string.Empty : string.Empty,
+                        Confidence:     c.TryGetProperty("confidence",      out var conf) ? conf.GetDouble() : 0,
+                        Description:    c.TryGetProperty("description",     out var desc) ? desc.GetString() ?? string.Empty : string.Empty));
+                }
             }
+
+            int? sourceCropIndex = null;
+            if (det.TryGetProperty("source_crop_index", out var sci) && sci.ValueKind == JsonValueKind.Number)
+                sourceCropIndex = sci.GetInt32();
+
+            var top = candidates.Count > 0 ? candidates[0] : null;
+
+            results.Add(new RecognitionResult(
+                Detected:       detected,
+                CommonName:     top?.CommonName     ?? string.Empty,
+                ScientificName: top?.ScientificName ?? string.Empty,
+                Confidence:     top?.Confidence     ?? 0,
+                Description:    top?.Description    ?? string.Empty,
+                RawResponse:    raw,
+                Candidates:     candidates,
+                SourcePoiIndex: sourceCropIndex));
         }
 
-        int? sourceCropIndex = null;
-        if (root.TryGetProperty("source_crop_index", out var sci) && sci.ValueKind == JsonValueKind.Number)
-            sourceCropIndex = sci.GetInt32();
-
-        var top = candidates.Count > 0 ? candidates[0] : null;
-
-        return new RecognitionResult(
-            Detected:       detected,
-            CommonName:     top?.CommonName     ?? string.Empty,
-            ScientificName: top?.ScientificName ?? string.Empty,
-            Confidence:     top?.Confidence     ?? 0,
-            Description:    top?.Description    ?? string.Empty,
-            RawResponse:    raw,
-            Candidates:     candidates,
-            SourcePoiIndex: sourceCropIndex);
+        return results;
     }
 }

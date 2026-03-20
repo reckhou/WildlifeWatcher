@@ -22,7 +22,7 @@ public interface IAiRecognitionService
     /// Recognizes wildlife. When <paramref name="poiJpegs"/> is non-empty the crops
     /// are sent to the AI instead of the full frame, improving detection of small subjects.
     /// </summary>
-    Task<RecognitionResult> RecognizeAsync(
+    Task<IReadOnlyList<RecognitionResult>> RecognizeAsync(
         byte[] fullFramePng,
         IReadOnlyList<byte[]>? poiJpegs = null,
         CancellationToken ct = default);

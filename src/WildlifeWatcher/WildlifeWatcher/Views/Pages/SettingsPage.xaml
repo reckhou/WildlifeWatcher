@@ -21,6 +21,12 @@
             <Setter Property="BorderBrush" Value="#CCCCCC"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="#888"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -59,11 +65,13 @@
             <TextBlock Text="Capture" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
 
-            <TextBlock Text="Cooldown between captures (seconds)" Style="{StaticResource Label}"/>
+            <TextBlock Text="Cooldown after detection (seconds)" Style="{StaticResource Label}"/>
+            <TextBlock Text="Suppresses AI calls for this many seconds after a species is saved. The camera still runs and POIs are still detected — only the API call is skipped. Prevents repeated alerts for the same animal." Style="{StaticResource Hint}"/>
             <TextBox Text="{Binding CooldownSeconds, UpdateSourceTrigger=PropertyChanged}"
                      Style="{StaticResource Field}"/>
 
-            <TextBlock Text="Frame extraction interval (seconds)" Style="{StaticResource Label}"/>
+            <TextBlock Text="Frame sampling interval (seconds)" Style="{StaticResource Label}"/>
+            <TextBlock Text="How often a frame is grabbed from the camera and analysed for motion. Independent of cooldown — the loop wakes up every N seconds regardless of whether a detection occurred." Style="{StaticResource Hint}"/>
             <TextBox Text="{Binding FrameIntervalSeconds, UpdateSourceTrigger=PropertyChanged}"
                      Style="{StaticResource Field}"/>
 

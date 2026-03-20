@@ -12,5 +12,6 @@ public interface IPointOfInterestService
     /// zones contribute to regions; all others are ignored.
     /// </summary>
     IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame,
-                                             IReadOnlyList<MotionZone>? whitelistZones = null);
+                                             IReadOnlyList<MotionZone>? whitelistZones = null,
+                                             int pixelThreshold = 25);
 }

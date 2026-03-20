@@ -130,7 +130,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
         IReadOnlyList<PoiRegion> poiRegions = Array.Empty<PoiRegion>();
         if (settings.EnablePoiExtraction)
         {
-            poiRegions = _poi.ExtractRegions(fg, currentFrame, zones);
+            poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold);
             _logger.LogInformation("POI extraction: {Count} region(s) found", poiRegions.Count);
             PoiRegionsDetected?.Invoke(this, poiRegions);
         }
@@ -167,36 +167,46 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
                 ? (IReadOnlyList<byte[]>)poiRegions.Select(r => r.CroppedJpeg).ToArray()
                 : null;
 
-            var result = await _ai.RecognizeAsync(currentFrame, poiJpegs, ct);
+            var results = await _ai.RecognizeAsync(currentFrame, poiJpegs, ct);
 
-            if (!result.Detected)
+            if (results.Count == 0 || results.All(r => !r.Detected))
             {
                 _logger.LogInformation("AI result: no wildlife detected");
             }
-            else if (result.Confidence < settings.MinConfidenceThreshold)
-            {
-                _logger.LogInformation(
-                    "AI result: {Species} detected but confidence {Confidence:P0} below threshold {Threshold:P0}",
-                    result.CommonName, result.Confidence, settings.MinConfidenceThreshold);
-            }
             else
             {
-                _cooldownUntil = DateTime.UtcNow.AddSeconds(settings.CooldownSeconds);
-
-                try { await _captureStorage.SaveCaptureAsync(currentFrame, result, poiRegions); }
-                catch (Exception ex) { _logger.LogError(ex, "Failed to save capture"); }
-
-                var evt = new DetectionEvent
+                bool cooldownSet = false;
+                foreach (var result in results.Where(r => r.Detected))
                 {
-                    DetectedAt = DateTime.Now,
-                    Result     = result,
-                    FramePng   = currentFrame,
-                    PoiRegions = poiRegions
-                };
-                DetectionOccurred?.Invoke(this, evt);
-                _logger.LogInformation(
-                    "✓ Detection: {Species} ({ScientificName}) — confidence {Confidence:P0}",
-                    result.CommonName, result.ScientificName, result.Confidence);
+                    if (result.Confidence < settings.MinConfidenceThreshold)
+                    {
+                        _logger.LogInformation(
+                            "AI result: {Species} detected but confidence {Confidence:P0} below threshold {Threshold:P0}",
+                            result.CommonName, result.Confidence, settings.MinConfidenceThreshold);
+                        continue;
+                    }
+
+                    if (!cooldownSet)
+                    {
+                        _cooldownUntil = DateTime.UtcNow.AddSeconds(settings.CooldownSeconds);
+                        cooldownSet    = true;
+                    }
+
+                    try { await _captureStorage.SaveCaptureAsync(currentFrame, result, poiRegions); }
+                    catch (Exception ex) { _logger.LogError(ex, "Failed to save capture"); }
+
+                    var evt = new DetectionEvent
+                    {
+                        DetectedAt = DateTime.Now,
+                        Result     = result,
+                        FramePng   = currentFrame,
+                        PoiRegions = poiRegions
+                    };
+                    DetectionOccurred?.Invoke(this, evt);
+                    _logger.LogInformation(
+                        "✓ Detection: {Species} ({ScientificName}) — confidence {Confidence:P0}",
+                        result.CommonName, result.ScientificName, result.Confidence);
+                }
             }
         }
         finally

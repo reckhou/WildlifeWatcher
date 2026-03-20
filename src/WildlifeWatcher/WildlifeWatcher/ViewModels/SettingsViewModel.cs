@@ -40,7 +40,7 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private double _minConfidenceThreshold = 0.7;
     [ObservableProperty] private double _motionSensitivity = 0.5;
     [ObservableProperty] private double _motionBackgroundAlpha = 0.05;
-    [ObservableProperty] private int    _motionPixelThreshold = 15;
+    [ObservableProperty] private int    _motionPixelThreshold = 25;
 
     // Data & Storage
     [ObservableProperty] private string _databasePath = string.Empty;
@@ -100,8 +100,13 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     public string PixelThresholdAdvice =>
-        "Lower = catches subtle colour changes (birds on pavement); Higher = ignores noise/shadows. " +
-        $"Current: {MotionPixelThreshold} — pixels must differ by >{MotionPixelThreshold}/255 intensity to count as changed.";
+        MotionPixelThreshold < 15
+            ? $"Warning: {MotionPixelThreshold} is below the noise floor — expect false triggers from camera noise and JPEG artifacts. Recommended: 20–30."
+            : MotionPixelThreshold <= 20
+                ? $"Current: {MotionPixelThreshold} — sensitive; may fire on compression artefacts in low light. Recommended: 20–30 for outdoor cameras."
+                : MotionPixelThreshold <= 35
+                    ? $"Current: {MotionPixelThreshold} — good balance. Ignores sensor noise/JPEG artefacts; detects real movement reliably. Recommended range: 20–30."
+                    : $"Current: {MotionPixelThreshold} — high threshold; only strong contrast changes trigger. May miss small or camouflaged subjects.";
 
     partial void OnMotionBackgroundAlphaChanged(double value)  => OnPropertyChanged(nameof(AlphaAdvice));
     partial void OnFrameIntervalSecondsChanged(int value)      => OnPropertyChanged(nameof(AlphaAdvice));
