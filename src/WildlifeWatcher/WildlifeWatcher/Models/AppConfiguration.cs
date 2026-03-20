@@ -10,6 +10,7 @@ public class AppConfiguration
     public int CooldownSeconds { get; set; } = 30;
     public string CapturesDirectory { get; set; } = "captures";
     public string ClaudeModel { get; set; } = "claude-haiku-4-5-20251001";
+    public string GeminiModel { get; set; } = "gemini-2.0-flash";
     public int FrameExtractionIntervalSeconds { get; set; } = 30;
     public double MinConfidenceThreshold { get; set; } = 0.7;
     public AiProvider AiProvider { get; set; } = AiProvider.Claude;
@@ -28,6 +29,8 @@ public class AppConfiguration
     /// Range: 5–50. Default 15.
     /// </summary>
     public int MotionPixelThreshold { get; set; } = 15;
+
+    public List<MotionZone> MotionWhitelistZones { get; set; } = new();
 
     public string DatabasePath { get; set; } = string.Empty;
 

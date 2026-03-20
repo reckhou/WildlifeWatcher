@@ -2,16 +2,13 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Anthropic.SDK;
-using Anthropic.SDK.Messaging;
+using Mscc.GenerativeAI;
 using Microsoft.Extensions.Logging;
 using WildlifeWatcher.Services.Interfaces;
-using ImageSource = Anthropic.SDK.Messaging.ImageSource;
-using Message = Anthropic.SDK.Messaging.Message;
 
 namespace WildlifeWatcher.Services;
 
-public class ClaudeRecognitionService : IAiRecognitionService
+public class GeminiRecognitionService : IAiRecognitionService
 {
     private const string SystemPrompt =
         "You are a garden wildlife identification assistant. " +
@@ -25,16 +22,16 @@ public class ClaudeRecognitionService : IAiRecognitionService
 
     private readonly ISettingsService _settings;
     private readonly ICredentialService _credentials;
-    private readonly ILogger<ClaudeRecognitionService> _logger;
+    private readonly ILogger<GeminiRecognitionService> _logger;
 
-    public ClaudeRecognitionService(
+    public GeminiRecognitionService(
         ISettingsService settings,
         ICredentialService credentials,
-        ILogger<ClaudeRecognitionService> logger)
+        ILogger<GeminiRecognitionService> logger)
     {
-        _settings = settings;
+        _settings    = settings;
         _credentials = credentials;
-        _logger = logger;
+        _logger      = logger;
     }
 
     public async Task<RecognitionResult> RecognizeAsync(
@@ -42,54 +39,43 @@ public class ClaudeRecognitionService : IAiRecognitionService
         IReadOnlyList<byte[]>? poiJpegs = null,
         CancellationToken ct = default)
     {
-        var apiKey = _credentials.LoadCredentials()?.AnthropicApiKey ?? string.Empty;
+        var apiKey = _credentials.LoadCredentials()?.GeminiApiKey ?? string.Empty;
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            _logger.LogWarning("No Anthropic API key configured; skipping AI recognition");
+            _logger.LogWarning("No Gemini API key configured; skipping AI recognition");
             return new RecognitionResult(false, string.Empty, string.Empty, 0, string.Empty, string.Empty, Array.Empty<SpeciesCandidate>(), SourcePoiIndex: null);
         }
 
-        var model = _settings.CurrentSettings.ClaudeModel;
-
-        // Build image content — prefer POI crops over full frame
-        List<ContentBase> content;
-        if (poiJpegs is { Count: > 0 })
-        {
-            _logger.LogInformation("Sending {Count} POI crop(s) to AI ({Model})", poiJpegs.Count, model);
-            content = BuildPoiContent(poiJpegs);
-        }
-        else
-        {
-            var (compressed, mediaType) = ResizeAndCompress(fullFramePng);
-            _logger.LogInformation("Frame compressed: {Original} KB → {Compressed} KB",
-                fullFramePng.Length / 1024, compressed.Length / 1024);
-            content = BuildSingleImageContent(compressed, mediaType);
-        }
+        var modelName = _settings.CurrentSettings.GeminiModel;
 
         try
         {
-            var client = new AnthropicClient(apiKey);
+            var googleAi = new GoogleAI(apiKey: apiKey);
+            var model    = googleAi.GenerativeModel(
+                model:             modelName,
+                systemInstruction: new Content(new TextData { Text = SystemPrompt }));
 
-            var messages = new List<Message>
+            List<IPart> parts;
+            if (poiJpegs is { Count: > 0 })
             {
-                new()
+                _logger.LogInformation("Sending {Count} POI crop(s) to Gemini ({Model})", poiJpegs.Count, modelName);
+                parts = BuildPoiParts(poiJpegs);
+            }
+            else
+            {
+                var (compressed, _) = ResizeAndCompress(fullFramePng);
+                _logger.LogInformation("Frame compressed: {Original} KB → {Compressed} KB",
+                    fullFramePng.Length / 1024, compressed.Length / 1024);
+                parts = new List<IPart>
                 {
-                    Role    = RoleType.User,
-                    Content = content
-                }
-            };
+                    new InlineData { MimeType = "image/jpeg", Data = Convert.ToBase64String(compressed) },
+                    new TextData   { Text = "Identify any wild animals in this image." }
+                };
+            }
 
-            var parameters = new MessageParameters
-            {
-                Model     = model,
-                MaxTokens = 1024,
-                System    = new List<SystemMessage> { new(SystemPrompt) },
-                Messages  = messages
-            };
-
-            var response = await client.Messages.GetClaudeMessageAsync(parameters, ct);
-            var raw      = response.Message.ToString() ?? string.Empty;
-            _logger.LogInformation("Claude raw response: {Raw}", raw);
+            var response = await model.GenerateContent(parts);
+            var raw      = response.Text ?? string.Empty;
+            _logger.LogInformation("Gemini raw response: {Raw}", raw);
 
             return ParseResponse(raw);
         }
@@ -100,47 +86,32 @@ public class ClaudeRecognitionService : IAiRecognitionService
         catch (Exception ex)
         {
             var inner = ex.InnerException != null ? $" Inner: {ex.InnerException.Message}" : string.Empty;
-            _logger.LogError("Claude API error [{Type}]: {Message}.{Inner}", ex.GetType().Name, ex.Message, inner);
+            _logger.LogError("Gemini API error [{Type}]: {Message}.{Inner}", ex.GetType().Name, ex.Message, inner);
             return new RecognitionResult(false, string.Empty, string.Empty, 0, string.Empty, ex.Message, Array.Empty<SpeciesCandidate>(), SourcePoiIndex: null);
         }
     }
 
     // ── Content builders ──────────────────────────────────────────────────
 
-    private static List<ContentBase> BuildSingleImageContent(byte[] imageBytes, string mediaType)
+    private static List<IPart> BuildPoiParts(IReadOnlyList<byte[]> crops)
     {
-        return new List<ContentBase>
-        {
-            new ImageContent
-            {
-                Source = new ImageSource { MediaType = mediaType, Data = Convert.ToBase64String(imageBytes) }
-            },
-            new TextContent { Text = "Identify any wild animals in this image." }
-        };
-    }
-
-    private static List<ContentBase> BuildPoiContent(IReadOnlyList<byte[]> crops)
-    {
-        var content = new List<ContentBase>();
+        var parts = new List<IPart>();
         for (int i = 0; i < crops.Count; i++)
         {
-            content.Add(new TextContent { Text = $"Region {i + 1}:" });
-            content.Add(new ImageContent
+            parts.Add(new TextData { Text = $"Region {i + 1}:" });
+            parts.Add(new InlineData
             {
-                Source = new ImageSource
-                {
-                    MediaType = "image/jpeg",
-                    Data      = Convert.ToBase64String(crops[i])
-                }
+                MimeType = "image/jpeg",
+                Data     = Convert.ToBase64String(crops[i])
             });
         }
-        content.Add(new TextContent
+        parts.Add(new TextData
         {
             Text = "These are cropped regions from a garden wildlife camera. " +
                    "Identify any wild animals visible across these images. " +
                    "Report the best match found and include \"source_crop_index\" (1-based integer) for which region it appeared in, or detected:false if none are present."
         });
-        return content;
+        return parts;
     }
 
     // ── Image helpers ─────────────────────────────────────────────────────

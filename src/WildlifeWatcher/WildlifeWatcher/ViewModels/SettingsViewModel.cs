@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -48,12 +49,22 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private AiProvider _aiProvider = AiProvider.Claude;
     [ObservableProperty] private string     _claudeModel = "claude-haiku-4-5-20251001";
     [ObservableProperty] private string     _anthropicApiKey = string.Empty;
+    [ObservableProperty] private string     _geminiModel = "gemini-2.0-flash";
+    [ObservableProperty] private string     _geminiApiKey = string.Empty;
 
     // POI
     [ObservableProperty] private bool _enablePoiExtraction = true;
     [ObservableProperty] private bool _savePoiDebugImages  = true;
 
     [ObservableProperty] private string _saveStatus = string.Empty;
+
+    // Motion Zones
+    [ObservableProperty] private byte[]? _zoneEditorBackground;
+    [ObservableProperty] private bool    _isCapturingZoneBackground;
+    public ObservableCollection<MotionZoneItem> MotionZones { get; } = new();
+
+    private const double ZoneCanvasW = 560;
+    private const double ZoneCanvasH = 315;
 
     public IEnumerable<AiProvider> AiProviders => Enum.GetValues<AiProvider>();
 
@@ -126,6 +137,7 @@ public partial class SettingsViewModel : ViewModelBase
         SavePoiDebugImages     = s.SavePoiDebugImages;
         AiProvider             = s.AiProvider;
         ClaudeModel            = s.ClaudeModel;
+        GeminiModel            = s.GeminiModel;
         DatabasePath           = s.DatabasePath;
 
         _savedCapturesDirectory = s.CapturesDirectory;
@@ -137,7 +149,10 @@ public partial class SettingsViewModel : ViewModelBase
             RtspUsername    = creds.RtspUsername;
             RtspPassword    = creds.RtspPassword;
             AnthropicApiKey = creds.AnthropicApiKey;
+            GeminiApiKey    = creds.GeminiApiKey;
         }
+
+        RefreshZoneItems();
     }
 
     [RelayCommand]
@@ -206,14 +221,54 @@ public partial class SettingsViewModel : ViewModelBase
             MotionPixelThreshold           = MotionPixelThreshold,
             AiProvider                     = AiProvider,
             ClaudeModel                    = ClaudeModel,
+            GeminiModel                    = GeminiModel,
             EnableLocalPreFilter           = true,
             EnablePoiExtraction            = EnablePoiExtraction,
             SavePoiDebugImages             = SavePoiDebugImages,
             DatabasePath                   = DatabasePath,
+            MotionWhitelistZones           = new List<MotionZone>(MotionZones.Select(z => z.ToMotionZone())),
         });
-        _credentialService.SaveCredentials(RtspUsername, RtspPassword, AnthropicApiKey);
+        _credentialService.SaveCredentials(RtspUsername, RtspPassword, AnthropicApiKey, GeminiApiKey);
         SaveStatus = "Settings saved.";
         _logger.LogInformation("Settings saved by user");
+    }
+
+    // ── Motion Zone management ────────────────────────────────────────────
+
+    private void RefreshZoneItems()
+    {
+        MotionZones.Clear();
+        var zones = _settingsService.CurrentSettings.MotionWhitelistZones;
+        for (int i = 0; i < zones.Count; i++)
+            MotionZones.Add(MotionZoneItem.From(zones[i], i + 1, ZoneCanvasW, ZoneCanvasH));
+    }
+
+    public void AddZone(MotionZone zone)
+    {
+        _settingsService.CurrentSettings.MotionWhitelistZones.Add(zone);
+        RefreshZoneItems();
+    }
+
+    [RelayCommand]
+    public void RemoveZone(MotionZoneItem item)
+    {
+        _settingsService.CurrentSettings.MotionWhitelistZones.RemoveAt(item.Index - 1);
+        RefreshZoneItems();
+    }
+
+    [RelayCommand]
+    public void ClearZones()
+    {
+        _settingsService.CurrentSettings.MotionWhitelistZones.Clear();
+        MotionZones.Clear();
+    }
+
+    [RelayCommand]
+    private async Task CaptureZoneBackgroundAsync()
+    {
+        IsCapturingZoneBackground = true;
+        try   { ZoneEditorBackground = await _camera.ExtractFrameAsync(); }
+        finally { IsCapturingZoneBackground = false; }
     }
 
     [RelayCommand]

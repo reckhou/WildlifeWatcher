@@ -112,10 +112,13 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
             return;
         }
 
+        var zones = settings.MotionWhitelistZones.Count > 0
+            ? (IReadOnlyList<MotionZone>)settings.MotionWhitelistZones : null;
+
         // ── Motion pre-filter ────────────────────────────────────────────
         if (settings.EnableLocalPreFilter)
         {
-            if (!_motion.HasMotion(fg, settings.MotionSensitivity, settings.MotionPixelThreshold))
+            if (!_motion.HasMotion(fg, settings.MotionSensitivity, settings.MotionPixelThreshold, zones))
             {
                 _logger.LogInformation("Motion pre-filter: no motion detected, skipping AI call");
                 return;
@@ -127,7 +130,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
         IReadOnlyList<PoiRegion> poiRegions = Array.Empty<PoiRegion>();
         if (settings.EnablePoiExtraction)
         {
-            poiRegions = _poi.ExtractRegions(fg, currentFrame);
+            poiRegions = _poi.ExtractRegions(fg, currentFrame, zones);
             _logger.LogInformation("POI extraction: {Count} region(s) found", poiRegions.Count);
             PoiRegionsDetected?.Invoke(this, poiRegions);
         }
@@ -149,7 +152,10 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService
         }
 
         // ── AI recognition ───────────────────────────────────────────────
-        _logger.LogInformation("Sending frame to AI ({Model})…", settings.ClaudeModel);
+        var activeModel = settings.AiProvider == WildlifeWatcher.Models.AiProvider.Gemini
+            ? settings.GeminiModel
+            : settings.ClaudeModel;
+        _logger.LogInformation("Sending frame to AI ({Provider}/{Model})…", settings.AiProvider, activeModel);
         SetAnalyzing(true);
         try
         {

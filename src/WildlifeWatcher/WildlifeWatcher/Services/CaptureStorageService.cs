@@ -46,14 +46,17 @@ public class CaptureStorageService : ICaptureStorageService
         if (poiRegions is { Count: > 0 })
         {
             var speciesLabel   = $"{result.CommonName} ({result.Confidence:P0})";
-            var annotatedBytes = DrawPoiOverlay(jpegBytes, poiRegions, speciesLabel);
+            var annotatedBytes = DrawPoiOverlay(jpegBytes, poiRegions, speciesLabel, result.SourcePoiIndex);
             annotatedPath      = Path.Combine(captureDir, $"{baseName}_annotated.jpg");
             await File.WriteAllBytesAsync(annotatedPath, annotatedBytes);
             _logger.LogInformation("Annotated capture saved: {Path}", annotatedPath);
 
             foreach (var poi in poiRegions)
             {
-                var cropBytes = LabelCropJpeg(poi.CroppedJpeg, speciesLabel);
+                bool isSource = result.SourcePoiIndex == null || poi.Index == result.SourcePoiIndex;
+                var cropBytes = isSource
+                    ? LabelCropJpeg(poi.CroppedJpeg, speciesLabel)
+                    : poi.CroppedJpeg;
                 var cropPath  = Path.Combine(captureDir, $"{baseName}_poi_{poi.Index}.jpg");
                 await File.WriteAllBytesAsync(cropPath, cropBytes);
             }
@@ -156,7 +159,7 @@ public class CaptureStorageService : ICaptureStorageService
         await db.SaveChangesAsync();
     }
 
-    private static byte[] DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel)
+    private static byte[] DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)
     {
         return Application.Current.Dispatcher.Invoke(() =>
         {
@@ -186,17 +189,21 @@ public class CaptureStorageService : ICaptureStorageService
                         poi.NLeft * w, poi.NTop * h, poi.NWidth * w, poi.NHeight * h);
                     dc.DrawRectangle(null, pen, rect);
 
-                    var ft = new System.Windows.Media.FormattedText(
-                        speciesLabel,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        System.Windows.FlowDirection.LeftToRight,
-                        typeface, fontSize, textBrush, 1.0);
+                    bool isSource = sourcePoiIndex == null || poi.Index == sourcePoiIndex;
+                    if (isSource)
+                    {
+                        var ft = new System.Windows.Media.FormattedText(
+                            speciesLabel,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Windows.FlowDirection.LeftToRight,
+                            typeface, fontSize, textBrush, 1.0);
 
-                    // Place label just above the box; clamp to top edge
-                    double labelY = Math.Max(0, rect.Y - ft.Height - 4);
-                    var labelBg   = new System.Windows.Rect(rect.X, labelY, ft.Width + 8, ft.Height + 4);
-                    dc.DrawRectangle(bgBrush, null, labelBg);
-                    dc.DrawText(ft, new System.Windows.Point(rect.X + 4, labelY + 2));
+                        // Place label just above the box; clamp to top edge
+                        double labelY = Math.Max(0, rect.Y - ft.Height - 4);
+                        var labelBg   = new System.Windows.Rect(rect.X, labelY, ft.Width + 8, ft.Height + 4);
+                        dc.DrawRectangle(bgBrush, null, labelBg);
+                        dc.DrawText(ft, new System.Windows.Point(rect.X + 4, labelY + 2));
+                    }
                 }
             }
 

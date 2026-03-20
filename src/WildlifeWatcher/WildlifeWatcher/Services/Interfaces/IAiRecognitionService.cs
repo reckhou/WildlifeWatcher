@@ -13,7 +13,8 @@ public record RecognitionResult(
     double Confidence,
     string Description,
     string RawResponse,
-    IReadOnlyList<SpeciesCandidate> Candidates);
+    IReadOnlyList<SpeciesCandidate> Candidates,
+    int? SourcePoiIndex);           // 1-based; null when full frame was used
 
 public interface IAiRecognitionService
 {

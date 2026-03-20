@@ -8,6 +8,9 @@ public interface IPointOfInterestService
     /// Uses the foreground mask from the background model to find hotspot regions,
     /// then returns padded JPEG crops from the full-resolution current frame.
     /// Returns an empty list when motion is too diffuse to isolate distinct hotspots.
+    /// When <paramref name="whitelistZones"/> is provided, only hot cells inside those
+    /// zones contribute to regions; all others are ignored.
     /// </summary>
-    IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame);
+    IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame,
+                                             IReadOnlyList<MotionZone>? whitelistZones = null);
 }

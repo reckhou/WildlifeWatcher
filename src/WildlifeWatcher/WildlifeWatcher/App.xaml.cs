@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Serilog;
 using WildlifeWatcher.Data;
+using WildlifeWatcher.Models;
 using WildlifeWatcher.Services;
 using WildlifeWatcher.Services.Interfaces;
 using WildlifeWatcher.ViewModels;
@@ -53,8 +54,11 @@ public partial class App : Application
                 // Camera (Phase 2)
                 services.AddSingleton<ICameraService, RtspCameraService>();
 
-                // AI recognition (Phase 3)
-                services.AddSingleton<IAiRecognitionService, ClaudeRecognitionService>();
+                // AI recognition (Phase 3) — provider selected at startup
+                if (bootstrap.CurrentSettings.AiProvider == AiProvider.Gemini)
+                    services.AddSingleton<IAiRecognitionService, GeminiRecognitionService>();
+                else
+                    services.AddSingleton<IAiRecognitionService, ClaudeRecognitionService>();
                 services.AddSingleton<IBackgroundModelService, BackgroundModelService>();
                 services.AddSingleton<IMotionDetectionService, MotionDetectionService>();
                 services.AddSingleton<IPointOfInterestService, PointOfInterestService>();

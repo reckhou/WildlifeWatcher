@@ -184,6 +184,10 @@ public class RtspCameraService : ICameraService
 
     private void OnLibVlcLog(object? sender, LogEventArgs e)
     {
+        // Suppress known benign VLC internal probes that produce noisy warnings
+        if (e.Message != null && e.Message.Contains("unsupported control query"))
+            return;
+
         // Keep a rolling window of recent messages for error reporting
         _recentVlcMessages.Enqueue($"[{e.Level}] {e.Message}");
         while (_recentVlcMessages.Count > 50)

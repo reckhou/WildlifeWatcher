@@ -24,10 +24,13 @@ public class PointOfInterestService : IPointOfInterestService
     private const double CellHotFraction  = 0.06; // fraction of cell pixels that must be foreground
     private const int    MinCellCount     = 1;    // minimum hot cells to form a region
     private const double PadFraction      = 0.40; // padding added around tight bounding box
+    private const double MaxBlobFraction  = 0.20; // skip tight bbox larger than 20% of frame in either dimension
+    private const double MaxCropFraction  = 0.25; // clamp padded crop to 25% of frame in either dimension
     private const int    CropMaxDimension = 640;  // max side length of the crop sent to AI
     private const int    MaxRegions       = 5;    // cap to avoid sending too many images
 
-    public IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame)
+    public IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame,
+                                                     IReadOnlyList<MotionZone>? whitelistZones = null)
     {
         // ── 1. Build hot-cell grid ──────────────────────────────────────────
         var hotCells = new bool[GridRows, GridCols];
@@ -44,6 +47,22 @@ public class PointOfInterestService : IPointOfInterestService
                     if (foreground[idx] > PixelThreshold) changed++;
                 }
                 hotCells[row, col] = changed >= cellPixels * CellHotFraction;
+            }
+        }
+
+        // ── 1b. Mask hot cells outside whitelist zones ──────────────────────
+        if (whitelistZones is { Count: > 0 })
+        {
+            for (int r = 0; r < GridRows; r++)
+            for (int c = 0; c < GridCols; c++)
+            {
+                if (!hotCells[r, c]) continue;
+                double nx = (c + 0.5) / GridCols;
+                double ny = (r + 0.5) / GridRows;
+                if (!whitelistZones.Any(z =>
+                        nx >= z.NLeft && nx <= z.NLeft + z.NWidth &&
+                        ny >= z.NTop  && ny <= z.NTop  + z.NHeight))
+                    hotCells[r, c] = false;
             }
         }
 
@@ -125,6 +144,29 @@ public class PointOfInterestService : IPointOfInterestService
             int cropW = cx2 - cx1;
             int cropH = cy2 - cy1;
             if (cropW < 20 || cropH < 20) continue;
+
+            // Skip blobs whose tight bounding box is too large to be a single bird
+            double tightW = x2 - x1;
+            double tightH = y2 - y1;
+            if (tightW > imgW * MaxBlobFraction || tightH > imgH * MaxBlobFraction) continue;
+
+            // Clamp padded crop to max size, centered on the tight bbox centroid
+            int maxCropW = (int)(imgW * MaxCropFraction);
+            int maxCropH = (int)(imgH * MaxCropFraction);
+            if (cropW > maxCropW)
+            {
+                double blobCx = (x1 + x2) / 2.0;
+                cx1   = (int)Math.Max(0,    blobCx - maxCropW / 2.0);
+                cx2   = Math.Min(imgW, cx1 + maxCropW);
+                cropW = cx2 - cx1;
+            }
+            if (cropH > maxCropH)
+            {
+                double blobCy = (y1 + y2) / 2.0;
+                cy1   = (int)Math.Max(0,    blobCy - maxCropH / 2.0);
+                cy2   = Math.Min(imgH, cy1 + maxCropH);
+                cropH = cy2 - cy1;
+            }
 
             byte[] croppedJpeg = CropAndEncode(fullRes, cx1, cy1, cropW, cropH);
             regions.Add(new PoiRegion(

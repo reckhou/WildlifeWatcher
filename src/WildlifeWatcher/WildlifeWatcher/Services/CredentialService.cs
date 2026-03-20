@@ -41,14 +41,15 @@ public class CredentialService : ICredentialService
         }
     }
 
-    public void SaveCredentials(string rtspUsername, string rtspPassword, string anthropicApiKey)
+    public void SaveCredentials(string rtspUsername, string rtspPassword, string anthropicApiKey, string geminiApiKey = "")
     {
         Directory.CreateDirectory(AppDataDir);
         var credentials = new Credentials
         {
-            RtspUsername = rtspUsername,
-            RtspPassword = rtspPassword,
-            AnthropicApiKey = anthropicApiKey
+            RtspUsername    = rtspUsername,
+            RtspPassword    = rtspPassword,
+            AnthropicApiKey = anthropicApiKey,
+            GeminiApiKey    = geminiApiKey
         };
         var json = JsonSerializer.Serialize(credentials);
         var plainBytes = Encoding.UTF8.GetBytes(json);
