@@ -184,16 +184,17 @@ public class UpdateService : IUpdateService
         var script = $"""
             Start-Sleep -Seconds 3
             Copy-Item -Path "{extractedDir}\*" -Destination "{appDir}" -Recurse -Force
-            Start-Process "{currentExe}"
+            Start-Process "{currentExe}" -WindowStyle Normal
             """;
         await File.WriteAllTextAsync(scriptPath, script, ct);
 
+        // UseShellExecute = true so PowerShell runs with full shell context and can
+        // spawn the new process with a proper window station (fixes VLC embedding after restart).
         Process.Start(new ProcessStartInfo
         {
             FileName        = "powershell.exe",
             Arguments       = $"-ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\"",
-            UseShellExecute = false,
-            CreateNoWindow  = true
+            UseShellExecute = true,
         });
 
         System.Windows.Application.Current.Dispatcher.Invoke(
