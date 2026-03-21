@@ -262,7 +262,13 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Margin="8,8,8,0" Background="#252525"
-                                                CornerRadius="4" Padding="8">
+                                                CornerRadius="4" Padding="8" Cursor="Hand">
+                                            <Border.InputBindings>
+                                                <MouseBinding MouseAction="LeftClick"
+                                                              Command="{Binding DataContext.OpenDetectionCommand,
+                                                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              CommandParameter="{Binding}"/>
+                                            </Border.InputBindings>
                                             <StackPanel>
                                                 <Image Height="100" Stretch="UniformToFill"
                                                        Source="{Binding FramePng, Converter={StaticResource BytesToBitmapConverter}}"

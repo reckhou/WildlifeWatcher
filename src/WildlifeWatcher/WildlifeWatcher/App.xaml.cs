@@ -62,95 +62,122 @@ public partial class App : Application
             .WriteTo.Sink(inMemorySink)
             .CreateLogger();
 
-        // Bootstrap settings to read the effective DB path before DI is configured
-        var bootstrap = new SettingsService(NullLogger<SettingsService>.Instance);
-        var dbPath    = bootstrap.CurrentSettings.GetEffectiveDatabasePath();
-
-        _host = Host.CreateDefaultBuilder()
-            .UseSerilog()
-            .ConfigureServices((_, services) =>
-            {
-                services.AddDbContextFactory<WildlifeDbContext>(options =>
-                    options.UseSqlite($"Data Source={dbPath}"));
-
-                // Core services
-                services.AddSingleton<ISettingsService, SettingsService>();
-                services.AddSingleton<ICredentialService, CredentialService>();
-                services.AddSingleton<IDataPortService, DataPortService>();
-
-                // Camera (Phase 2)
-                services.AddSingleton<ICameraService, RtspCameraService>();
-
-                // AI recognition (Phase 3) — provider resolved at runtime via settings
-                services.AddSingleton<ClaudeRecognitionService>();
-                services.AddSingleton<GeminiRecognitionService>();
-                services.AddSingleton<IAiRecognitionService, AiRecognitionServiceResolver>();
-                services.AddSingleton<IBackgroundModelService, BackgroundModelService>();
-                services.AddSingleton<IPointOfInterestService, PointOfInterestService>();
-                services.AddSingleton<IRecognitionLoopService, RecognitionLoopService>();
-                services.AddHostedService(sp =>
-                    (RecognitionLoopService)sp.GetRequiredService<IRecognitionLoopService>());
-
-                // Capture storage (Phase 4)
-                services.AddSingleton<ICaptureStorageService, CaptureStorageService>();
-
-                // Bird photo service
-                services.AddSingleton<IBirdPhotoService, BirdPhotoService>();
-
-                // Named HTTP clients
-                services.AddHttpClient("inaturalist", c => {
-                    c.BaseAddress = new Uri("https://api.inaturalist.org/");
-                    c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0");
-                });
-                services.AddHttpClient("nominatim", c => {
-                    c.BaseAddress = new Uri("https://nominatim.openstreetmap.org/");
-                    c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0");
-                });
-                services.AddHttpClient("openmeteo", c =>
-                    c.BaseAddress = new Uri("https://api.open-meteo.com/"));
-                services.AddHttpClient("github", c => {
-                    c.BaseAddress = new Uri("https://api.github.com/");
-                    c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher");
-                });
-
-                // Weather & geocoding (Phase 6)
-                services.AddSingleton<IGeocodingService, NominatimGeocodingService>();
-                services.AddSingleton<IWeatherService, OpenMeteoWeatherService>();
-
-                // Auto-update (Phase 7)
-                services.AddSingleton<IUpdateService, UpdateService>();
-
-                // ViewModels
-                services.AddSingleton<MainViewModel>();
-                services.AddSingleton<LiveViewModel>();
-                services.AddSingleton<SettingsViewModel>();
-                services.AddSingleton<GalleryViewModel>();
-
-                // Pages (singletons — VideoView must not be recreated)
-                services.AddSingleton<LiveViewPage>();
-                services.AddSingleton<SettingsPage>();
-                services.AddSingleton<GalleryPage>();
-
-                // Main window
-                services.AddSingleton<MainWindow>();
-            })
-            .Build();
-
-        _host.Start();
-
-        // Apply any pending EF Core migrations on startup
-        var factory = _host.Services.GetRequiredService<IDbContextFactory<WildlifeDbContext>>();
-        using var db = factory.CreateDbContext();
-        db.Database.Migrate();
-
-        // Merge any duplicate species that share the same ScientificName
-        var captureStorage = _host.Services.GetRequiredService<ICaptureStorageService>();
-        captureStorage.MergeSpeciesByScientificNameAsync().GetAwaiter().GetResult();
-
-        var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-        mainWindow.Show();
+        // Show splash immediately before any heavy work
+        var splash = new SplashWindow();
+        splash.Show();
 
         base.OnStartup(e);
+
+        // Run all heavy startup work on a background thread, then show main window
+        _ = Dispatcher.InvokeAsync(async () =>
+        {
+            try
+            {
+                // Bootstrap settings to read the effective DB path before DI is configured
+                splash.SetStatus("Initialising…");
+                var bootstrap = new SettingsService(NullLogger<SettingsService>.Instance);
+                var dbPath    = bootstrap.CurrentSettings.GetEffectiveDatabasePath();
+
+                _host = Host.CreateDefaultBuilder()
+                    .UseSerilog()
+                    .ConfigureServices((_, services) =>
+                    {
+                        services.AddDbContextFactory<WildlifeDbContext>(options =>
+                            options.UseSqlite($"Data Source={dbPath}"));
+
+                        // Core services
+                        services.AddSingleton<ISettingsService, SettingsService>();
+                        services.AddSingleton<ICredentialService, CredentialService>();
+                        services.AddSingleton<IDataPortService, DataPortService>();
+
+                        // Camera (Phase 2)
+                        services.AddSingleton<ICameraService, RtspCameraService>();
+
+                        // AI recognition (Phase 3) — provider resolved at runtime via settings
+                        services.AddSingleton<ClaudeRecognitionService>();
+                        services.AddSingleton<GeminiRecognitionService>();
+                        services.AddSingleton<IAiRecognitionService, AiRecognitionServiceResolver>();
+                        services.AddSingleton<IBackgroundModelService, BackgroundModelService>();
+                        services.AddSingleton<IPointOfInterestService, PointOfInterestService>();
+                        services.AddSingleton<IRecognitionLoopService, RecognitionLoopService>();
+                        services.AddHostedService(sp =>
+                            (RecognitionLoopService)sp.GetRequiredService<IRecognitionLoopService>());
+
+                        // Capture storage (Phase 4)
+                        services.AddSingleton<ICaptureStorageService, CaptureStorageService>();
+
+                        // Bird photo service
+                        services.AddSingleton<IBirdPhotoService, BirdPhotoService>();
+
+                        // Named HTTP clients
+                        services.AddHttpClient("inaturalist", c => {
+                            c.BaseAddress = new Uri("https://api.inaturalist.org/");
+                            c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0");
+                        });
+                        services.AddHttpClient("nominatim", c => {
+                            c.BaseAddress = new Uri("https://nominatim.openstreetmap.org/");
+                            c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0");
+                        });
+                        services.AddHttpClient("openmeteo", c =>
+                            c.BaseAddress = new Uri("https://api.open-meteo.com/"));
+                        services.AddHttpClient("github", c => {
+                            c.BaseAddress = new Uri("https://api.github.com/");
+                            c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher");
+                        });
+
+                        // Weather & geocoding (Phase 6)
+                        services.AddSingleton<IGeocodingService, NominatimGeocodingService>();
+                        services.AddSingleton<IWeatherService, OpenMeteoWeatherService>();
+
+                        // Auto-update (Phase 7)
+                        services.AddSingleton<IUpdateService, UpdateService>();
+
+                        // ViewModels
+                        services.AddSingleton<MainViewModel>();
+                        services.AddSingleton<LiveViewModel>();
+                        services.AddSingleton<SettingsViewModel>();
+                        services.AddSingleton<GalleryViewModel>();
+
+                        // Pages (singletons — VideoView must not be recreated)
+                        services.AddSingleton<LiveViewPage>();
+                        services.AddSingleton<SettingsPage>();
+                        services.AddSingleton<GalleryPage>();
+
+                        // Main window
+                        services.AddSingleton<MainWindow>();
+                    })
+                    .Build();
+
+                splash.SetStatus("Starting services…");
+                await Task.Run(() => _host.Start());
+
+                // Apply any pending EF Core migrations on startup
+                splash.SetStatus("Checking database…");
+                await Task.Run(() =>
+                {
+                    var factory = _host.Services.GetRequiredService<IDbContextFactory<WildlifeDbContext>>();
+                    using var db = factory.CreateDbContext();
+                    db.Database.Migrate();
+                });
+
+                // Merge any duplicate species that share the same ScientificName
+                splash.SetStatus("Preparing gallery…");
+                var captureStorage = _host.Services.GetRequiredService<ICaptureStorageService>();
+                await captureStorage.MergeSpeciesByScientificNameAsync();
+
+                var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+                mainWindow.Show();
+                splash.Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Startup failed");
+                Log.CloseAndFlush();
+                MessageBox.Show(ex.Message, "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                splash.Close();
+                Shutdown(1);
+            }
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)

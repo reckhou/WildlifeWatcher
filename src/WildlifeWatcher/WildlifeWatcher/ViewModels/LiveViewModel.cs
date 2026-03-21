@@ -11,6 +11,7 @@ using WildlifeWatcher.Models;
 using WildlifeWatcher.Services;
 using WildlifeWatcher.Services.Interfaces;
 using WildlifeWatcher.ViewModels.Base;
+using WildlifeWatcher.Views.Dialogs;
 
 
 namespace WildlifeWatcher.ViewModels;
@@ -22,6 +23,7 @@ public partial class LiveViewModel : ViewModelBase
     private readonly IBackgroundModelService _backgroundModel;
     private readonly ISettingsService        _settings;
     private readonly ILogger<LiveViewModel>  _logger;
+    private readonly ICaptureStorageService  _captureStorage;
     private readonly CancellationTokenSource _cts = new();
     private bool _userInitiatedDisconnect;
 
@@ -47,13 +49,15 @@ public partial class LiveViewModel : ViewModelBase
         IRecognitionLoopService  recognitionLoop,
         IBackgroundModelService  backgroundModel,
         ISettingsService         settings,
-        ILogger<LiveViewModel>   logger)
+        ILogger<LiveViewModel>   logger,
+        ICaptureStorageService   captureStorage)
     {
         _camera           = camera;
         _recognitionLoop  = recognitionLoop;
         _backgroundModel  = backgroundModel;
         _settings         = settings;
         _logger           = logger;
+        _captureStorage   = captureStorage;
 
         _camera.ConnectionStateChanged           += OnConnectionStateChanged;
         _recognitionLoop.DetectionOccurred       += OnDetectionOccurred;
@@ -149,6 +153,19 @@ public partial class LiveViewModel : ViewModelBase
             TrainingStatusText   = "Training background model… 0%";
             TrainingTimeLeftText = ComputeTimeLeftText();
         });
+    }
+
+    [RelayCommand]
+    private async Task OpenDetectionAsync(DetectionEvent e)
+    {
+        var dayCaptures = await _captureStorage.GetCapturesByDateAsync(e.DetectedAt.Date);
+        var match = dayCaptures
+            .Where(c => c.Species.CommonName == e.Result.CommonName)
+            .MinBy(c => Math.Abs((c.CapturedAt - e.DetectedAt).Ticks));
+        if (match is null) return;
+
+        var dialog = new CaptureDetailDialog(match, _captureStorage);
+        dialog.ShowDialog();
     }
 
     // ── Auto-connect loop ─────────────────────────────────────────────────

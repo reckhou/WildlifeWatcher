@@ -1,0 +1,47 @@
+<Window x:Class="WildlifeWatcher.Views.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="400" Height="200"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False">
+    <Border Background="#1A2E1A"
+            CornerRadius="10"
+            BorderBrush="#2D5A27"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center">
+                <TextBlock Text="🌿 Wildlife Watcher"
+                           FontSize="26"
+                           FontWeight="SemiBold"
+                           Foreground="White"
+                           HorizontalAlignment="Center"/>
+                <TextBlock x:Name="StatusText"
+                           Text="Loading…"
+                           FontSize="13"
+                           Foreground="#88AA88"
+                           HorizontalAlignment="Center"
+                           Margin="0,10,0,0"/>
+            </StackPanel>
+
+            <ProgressBar Grid.Row="1"
+                         IsIndeterminate="True"
+                         Height="3"
+                         Margin="0"
+                         Background="Transparent"
+                         Foreground="#4CAF50"
+                         BorderThickness="0"/>
+        </Grid>
+    </Border>
+</Window>

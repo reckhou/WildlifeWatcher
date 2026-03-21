@@ -52,14 +52,19 @@ public partial class MainViewModel : ViewModelBase
                 _statusClearTimer.Start();
             });
 
-        // Background update check after app finishes loading
+        // Background update check — fires after 3s then repeats every minute until update found
         _ = Task.Run(async () =>
         {
             try
             {
                 await Task.Delay(3000);
-                await Application.Current.Dispatcher.InvokeAsync(
-                    () => CheckForUpdateCommand.ExecuteAsync(null)).Task.Unwrap();
+                while (true)
+                {
+                    await Application.Current.Dispatcher.InvokeAsync(
+                        () => CheckForUpdateCommand.ExecuteAsync(null)).Task.Unwrap();
+                    if (IsUpdateAvailable) break;
+                    await Task.Delay(TimeSpan.FromMinutes(1));
+                }
             }
             catch (Exception ex)
             {

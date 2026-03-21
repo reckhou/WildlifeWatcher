@@ -128,9 +128,11 @@ public class UpdateService : IUpdateService
                 await fs.WriteAsync(buffer.AsMemory(0, read), ct);
                 received += read;
                 if (total > 0)
-                    progress.Report((int)(received * 100 / total));
+                    progress.Report((int)(received * 80 / total));
             }
         }
+
+        progress.Report(80);
 
         // Verify integrity before extracting
         if (!string.IsNullOrEmpty(update.Sha256))
@@ -148,7 +150,28 @@ public class UpdateService : IUpdateService
             _logger.LogInformation("SHA256 verified OK: {Hash}", actual);
         }
 
-        ZipFile.ExtractToDirectory(zipPath, extractDir);
+        // Extract on background thread, reporting 80–100%
+        await Task.Run(() =>
+        {
+            using var archive   = ZipFile.OpenRead(zipPath);
+            int entryTotal      = archive.Entries.Count;
+            int entryDone       = 0;
+            foreach (var entry in archive.Entries)
+            {
+                var dest = Path.Combine(extractDir, entry.FullName);
+                if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
+                {
+                    Directory.CreateDirectory(dest);
+                }
+                else
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                    entry.ExtractToFile(dest, overwrite: true);
+                }
+                progress.Report(80 + (int)(++entryDone * 20.0 / entryTotal));
+            }
+        }, ct);
+
         progress.Report(100);
 
         // Find the directory containing the exe
