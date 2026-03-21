@@ -211,6 +211,34 @@
             <TextBlock Text="Leave blank to use default location (%AppData%\WildlifeWatcher\wildlife.db)"
                        FontSize="10" Foreground="#888" TextWrapping="Wrap" Margin="0,2,0,6"/>
 
+            <!-- Backup & Restore -->
+            <TextBlock Text="Backup &amp; Restore" Style="{StaticResource Label}"
+                       FontWeight="SemiBold" Margin="0,8,0,2"/>
+            <TextBlock Text="Export or import your settings, database, and captures. API keys and camera credentials are not included."
+                       Style="{StaticResource Hint}"/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                <Button Content="Export Data…"
+                        Command="{Binding ExportDataCommand}"
+                        Background="#2D5A27" Foreground="White"
+                        BorderThickness="0" Padding="12,6"
+                        Cursor="Hand" FontSize="12"/>
+                <Button Content="Import Data…"
+                        Command="{Binding ImportDataCommand}"
+                        Background="#1A6B8A" Foreground="White"
+                        BorderThickness="0" Padding="12,6"
+                        Cursor="Hand" FontSize="12" Margin="8,0,0,0"/>
+            </StackPanel>
+
+            <ProgressBar Value="{Binding ExportImportProgress}"
+                         Visibility="{Binding IsExportImportBusy, Converter={StaticResource BoolToVisibleConverter}}"
+                         Height="6" Margin="0,4,0,4"
+                         Foreground="#2D5A27" Background="#E0E0E0"/>
+
+            <TextBlock Text="{Binding ExportImportStatus}"
+                       FontSize="11" Foreground="#555" Margin="0,2,0,6"
+                       TextWrapping="Wrap"/>
+
             <!-- ═══ Point of Interest ═══ -->
             <TextBlock Text="Point of Interest" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>

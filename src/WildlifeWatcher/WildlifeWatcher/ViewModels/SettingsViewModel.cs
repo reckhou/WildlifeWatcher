@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
@@ -23,6 +24,7 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly ICameraService      _camera;
     private readonly IGeocodingService   _geocoding;
     private readonly IUpdateService      _updateService;
+    private readonly IDataPortService    _dataPortService;
     private readonly IDbContextFactory<WildlifeDbContext> _dbFactory;
     private readonly ILogger<SettingsViewModel> _logger;
 
@@ -74,6 +76,11 @@ public partial class SettingsViewModel : ViewModelBase
     public bool HasLocationResults => LocationResults.Count > 0;
 
     [ObservableProperty] private string _saveStatus = string.Empty;
+
+    // Export / Import
+    [ObservableProperty] private bool   _isExportImportBusy;
+    [ObservableProperty] private string _exportImportStatus = string.Empty;
+    [ObservableProperty] private int    _exportImportProgress;
 
     // Updates
     [ObservableProperty] private string _updateCheckStatus    = string.Empty;
@@ -154,6 +161,7 @@ public partial class SettingsViewModel : ViewModelBase
         ICameraService     camera,
         IGeocodingService  geocoding,
         IUpdateService     updateService,
+        IDataPortService   dataPortService,
         IDbContextFactory<WildlifeDbContext> dbFactory,
         ILogger<SettingsViewModel> logger)
     {
@@ -162,6 +170,7 @@ public partial class SettingsViewModel : ViewModelBase
         _camera            = camera;
         _geocoding         = geocoding;
         _updateService     = updateService;
+        _dataPortService   = dataPortService;
         _dbFactory         = dbFactory;
         _logger            = logger;
 
@@ -429,6 +438,97 @@ public partial class SettingsViewModel : ViewModelBase
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "WildlifeWatcher", "wildlife.db")
             : configured;
+
+    // ── Export / Import ─────────────────────────────────────────────────
+
+    [RelayCommand(CanExecute = nameof(CanExportImport))]
+    private async Task ExportDataAsync()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export Wildlife Watcher data",
+            Filter = "ZIP archive|*.zip",
+            FileName = $"WildlifeWatcher_Export_{DateTime.Now:yyyyMMdd}.zip"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        IsExportImportBusy = true;
+        NotifyExportImportCanExecute();
+        ExportImportStatus = string.Empty;
+        ExportImportProgress = 0;
+        try
+        {
+            var progress = new Progress<(int percent, string message)>(p =>
+            {
+                ExportImportProgress = p.percent;
+                ExportImportStatus = p.message;
+            });
+            await _dataPortService.ExportAsync(dialog.FileName, progress, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Export failed");
+            ExportImportStatus = $"Export failed: {ex.Message}";
+        }
+        finally
+        {
+            IsExportImportBusy = false;
+            NotifyExportImportCanExecute();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExportImport))]
+    private async Task ImportDataAsync()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Import Wildlife Watcher data",
+            Filter = "ZIP archive|*.zip"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        var answer = MessageBox.Show(
+            "This will replace your current settings, database, and captures with the imported data.\n\n" +
+            "API keys and camera credentials will NOT be affected.\n\n" +
+            "The app will close and a progress window will handle the import, then restart.\n\nContinue?",
+            "Import Data", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes) return;
+
+        try
+        {
+            ExportImportStatus = "Preparing import…";
+
+            // Write a job file for the import subprocess
+            var job = new ImportJob
+            {
+                ZipPath = dialog.FileName,
+                PreserveRtspUrl = _settingsService.CurrentSettings.RtspUrl,
+                MainProcessId = Environment.ProcessId
+            };
+            var jobPath = Path.Combine(Path.GetTempPath(), $"ww_import_{Guid.NewGuid():N}.json");
+            await File.WriteAllTextAsync(jobPath, JsonSerializer.Serialize(job));
+
+            // Launch a new instance in import mode, then exit so DB file locks are released
+            var psi = new ProcessStartInfo { FileName = Environment.ProcessPath!, UseShellExecute = false };
+            psi.ArgumentList.Add($"--import-job={jobPath}");
+            Process.Start(psi);
+
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to launch import");
+            ExportImportStatus = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private bool CanExportImport() => !IsExportImportBusy;
+
+    private void NotifyExportImportCanExecute()
+    {
+        ExportDataCommand.NotifyCanExecuteChanged();
+        ImportDataCommand.NotifyCanExecuteChanged();
+    }
 
     // ── Update commands ───────────────────────────────────────────────────
 

@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +23,14 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Import mode: launched by the running app after it exits, so files are no longer locked
+        var importJobArg = e.Args.FirstOrDefault(a => a.StartsWith("--import-job="));
+        if (importJobArg != null)
+        {
+            RunImportMode(importJobArg["--import-job=".Length..]);
+            return; // Skip normal host startup
+        }
+
         var logDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "WildlifeWatcher", "logs");
@@ -50,6 +60,7 @@ public partial class App : Application
                 // Core services
                 services.AddSingleton<ISettingsService, SettingsService>();
                 services.AddSingleton<ICredentialService, CredentialService>();
+                services.AddSingleton<IDataPortService, DataPortService>();
 
                 // Camera (Phase 2)
                 services.AddSingleton<ICameraService, RtspCameraService>();
@@ -129,10 +140,65 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _host.Services.GetRequiredService<IBackgroundModelService>().SaveState();
-        _host.StopAsync().GetAwaiter().GetResult();
-        _host.Dispose();
+        // _host is null in import mode — guard before accessing it
+        if (_host != null)
+        {
+            _host.Services.GetRequiredService<IBackgroundModelService>().SaveState();
+            _host.StopAsync().GetAwaiter().GetResult();
+            _host.Dispose();
+        }
         Log.CloseAndFlush();
         base.OnExit(e);
+    }
+
+    private void RunImportMode(string jobPath)
+    {
+        try
+        {
+            var job = JsonSerializer.Deserialize<ImportJob>(File.ReadAllText(jobPath))
+                ?? throw new InvalidOperationException("Invalid import job file.");
+            try { File.Delete(jobPath); } catch { /* best effort */ }
+
+            // Wait for the main process to fully exit so its DB lock is released
+            if (job.MainProcessId > 0)
+            {
+                try
+                {
+                    using var mainProcess = Process.GetProcessById(job.MainProcessId);
+                    mainProcess.WaitForExit(15_000);
+                }
+                catch (ArgumentException) { /* already exited */ }
+            }
+
+            // Build minimal services — no hosted services, no camera, no AI
+            var settingsService = new SettingsService(NullLogger<SettingsService>.Instance);
+            var dbPath = settingsService.CurrentSettings.GetEffectiveDatabasePath();
+            var dbOptions = new DbContextOptionsBuilder<WildlifeDbContext>()
+                .UseSqlite($"Data Source={dbPath}")
+                .Options;
+            var dataPortService = new DataPortService(
+                settingsService,
+                new SimpleDbContextFactory(dbOptions),
+                NullLogger<DataPortService>.Instance);
+
+            var window = new ImportProgressWindow(dataPortService, job.ZipPath, job.PreserveRtspUrl);
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to start import: {ex.Message}", "Import Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
+    }
+
+    // Minimal IDbContextFactory used only in import mode (export path is not called during import)
+    private sealed class SimpleDbContextFactory : IDbContextFactory<WildlifeDbContext>
+    {
+        private readonly DbContextOptions<WildlifeDbContext> _opts;
+        public SimpleDbContextFactory(DbContextOptions<WildlifeDbContext> opts) => _opts = opts;
+        public WildlifeDbContext CreateDbContext() => new(_opts);
+        public Task<WildlifeDbContext> CreateDbContextAsync(CancellationToken ct = default)
+            => Task.FromResult(new WildlifeDbContext(_opts));
     }
 }
