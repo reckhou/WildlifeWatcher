@@ -55,6 +55,8 @@ public partial class App : Application
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
+            .MinimumLevel.Override("System.Net.Http", Serilog.Events.LogEventLevel.Warning)
+            .MinimumLevel.Override("System.Net.Http.HttpClient", Serilog.Events.LogEventLevel.Warning)
             .WriteTo.File(
                 Path.Combine(logDir, "wildlife-.log"),
                 rollingInterval: RollingInterval.Day,

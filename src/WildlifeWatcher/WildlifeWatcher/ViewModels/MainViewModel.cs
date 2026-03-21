@@ -52,7 +52,7 @@ public partial class MainViewModel : ViewModelBase
                 _statusClearTimer.Start();
             });
 
-        // Background update check — fires after 3s then repeats every minute until update found
+        // Background update check — fires after 3s then repeats every 5 minutes until update found
         _ = Task.Run(async () =>
         {
             try
@@ -63,7 +63,7 @@ public partial class MainViewModel : ViewModelBase
                     await Application.Current.Dispatcher.InvokeAsync(
                         () => CheckForUpdateCommand.ExecuteAsync(null)).Task.Unwrap();
                     if (IsUpdateAvailable) break;
-                    await Task.Delay(TimeSpan.FromMinutes(1));
+                    await Task.Delay(TimeSpan.FromMinutes(5));
                 }
             }
             catch (Exception ex)
