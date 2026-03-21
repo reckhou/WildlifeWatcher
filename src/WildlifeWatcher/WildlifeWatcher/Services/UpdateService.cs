@@ -23,11 +23,11 @@ public class UpdateService : IUpdateService
         _logger      = logger;
     }
 
-    public async Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default)
+    public async Task<UpdateInfo?> CheckForUpdateAsync(bool skipDebugOverride = false, CancellationToken ct = default)
     {
         var current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
-        if (_settings.CurrentSettings.DebugForceUpdateAvailable)
+        if (!skipDebugOverride && _settings.CurrentSettings.DebugForceUpdateAvailable)
             return new UpdateInfo
             {
                 CurrentVersion = current,

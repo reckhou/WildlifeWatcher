@@ -516,7 +516,7 @@ public partial class SettingsViewModel : ViewModelBase
 
         try
         {
-            var info = await _updateService.CheckForUpdateAsync();
+            var info = await _updateService.CheckForUpdateAsync(skipDebugOverride: true);
             if (info == null)
             {
                 UpdateCheckStatus = "Could not reach update server.";
