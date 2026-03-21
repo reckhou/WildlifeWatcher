@@ -70,7 +70,7 @@ public class CaptureStorageService : ICaptureStorageService
         var fileName   = $"{baseName}.jpg";
         var filePath   = Path.Combine(captureDir, fileName);
 
-        var jpegBytes = ConvertPngToJpeg(framePng);
+        var jpegBytes = ConvertPngToJpeg(framePng, quality: 100);
         await File.WriteAllBytesAsync(filePath, jpegBytes);
         _logger.LogInformation("Capture saved: {Path}", filePath);
 
