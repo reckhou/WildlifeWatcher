@@ -29,15 +29,13 @@ jobs:
       - name: Restore
         run: dotnet restore src/WildlifeWatcher/WildlifeWatcher.sln
 
-      - name: Publish (self-contained, single file)
+      - name: Publish (self-contained)
         run: >
           dotnet publish src/WildlifeWatcher/WildlifeWatcher/WildlifeWatcher.csproj
           --configuration Release
           --runtime win-x64
           --self-contained true
           --output ./publish
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
           -p:Version=${{ steps.version.outputs.version }}
 
       - name: Zip release

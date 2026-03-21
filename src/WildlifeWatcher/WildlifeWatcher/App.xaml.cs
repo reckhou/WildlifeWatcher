@@ -23,6 +23,22 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            var msg = args.ExceptionObject?.ToString() ?? "Unknown error";
+            Log.Fatal("Unhandled domain exception: {Error}", msg);
+            Log.CloseAndFlush();
+            MessageBox.Show(msg, "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        };
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Log.Fatal(args.Exception, "Unhandled dispatcher exception");
+            Log.CloseAndFlush();
+            MessageBox.Show(args.Exception.Message, "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            args.Handled = true;
+            Shutdown(1);
+        };
+
         // Import mode: launched by the running app after it exits, so files are no longer locked
         var importJobArg = e.Args.FirstOrDefault(a => a.StartsWith("--import-job="));
         if (importJobArg != null)
