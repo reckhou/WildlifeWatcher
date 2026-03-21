@@ -86,7 +86,6 @@ public partial class App : Application
                 services.AddSingleton<GeminiRecognitionService>();
                 services.AddSingleton<IAiRecognitionService, AiRecognitionServiceResolver>();
                 services.AddSingleton<IBackgroundModelService, BackgroundModelService>();
-                services.AddSingleton<IMotionDetectionService, MotionDetectionService>();
                 services.AddSingleton<IPointOfInterestService, PointOfInterestService>();
                 services.AddSingleton<IRecognitionLoopService, RecognitionLoopService>();
                 services.AddHostedService(sp =>

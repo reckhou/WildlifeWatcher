@@ -27,22 +27,7 @@ background[i] = α * gray[i] + (1-α) * background[i]
 
 ---
 
-## Step 3 — Motion pre-filter (`MotionDetectionService`)
-
-If `EnableLocalPreFilter` is on, `HasMotion()` checks the foreground array:
-
-- Counts pixels where `foreground[i] > MotionPixelThreshold` (changed enough to matter)
-- If whitelist zones are configured, only pixels inside those zones are counted
-- Calculates `fraction = changed / total`
-- Compares against `triggerFraction = (1.0 - sensitivity) * 0.08`
-  - sensitivity=1.0 → triggers on any change
-  - sensitivity=0.0 → needs 8% of pixels changed
-
-If no motion: tick is skipped, no AI call is made.
-
----
-
-## Step 4 — POI extraction (`PointOfInterestService`)
+## Step 3 — POI extraction (`PointOfInterestService`)
 
 If `EnablePoiExtraction` is on, this turns the foreground mask into a set of cropped JPEG regions to send to AI instead of the full frame:
 
@@ -62,13 +47,13 @@ If 0 regions are found: tick is skipped.
 
 ---
 
-## Step 5 — Cooldown check
+## Step 4 — Cooldown check
 
 If a detection already happened recently (`DateTime.UtcNow < _cooldownUntil`), the AI call is skipped. The cooldown is set when a detection is saved and lasts `CooldownSeconds`.
 
 ---
 
-## Step 6 — AI recognition (`ClaudeRecognitionService` / `GeminiRecognitionService`)
+## Step 5 — AI recognition (`ClaudeRecognitionService` / `GeminiRecognitionService`)
 
 `_ai.RecognizeAsync(currentFrame, poiJpegs, ct)` is called.
 
@@ -96,7 +81,7 @@ Up to 3 candidate species per detection, ordered by confidence.
 
 ---
 
-## Step 7 — Filter results and save
+## Step 6 — Filter results and save
 
 For each `detected: true` result:
 
@@ -114,7 +99,6 @@ tick (every N seconds)
   → extract frame
   → update EMA background model
   → [gate: training complete?]
-  → [gate: motion detected?]      ← MotionDetectionService on foreground mask
   → extract POI crops             ← PointOfInterestService BFS on hot-cell grid
   → [gate: POI count > 0?]
   → [gate: cooldown expired?]

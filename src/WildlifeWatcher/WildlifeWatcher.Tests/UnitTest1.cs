@@ -12,7 +12,6 @@ public class AppConfigurationTests
         Assert.Equal(30, config.CooldownSeconds);
         Assert.Equal(30, config.FrameExtractionIntervalSeconds);
         Assert.Equal(0.7, config.MinConfidenceThreshold);
-        Assert.True(config.EnableLocalPreFilter);
         Assert.Equal(AiProvider.Claude, config.AiProvider);
     }
 }

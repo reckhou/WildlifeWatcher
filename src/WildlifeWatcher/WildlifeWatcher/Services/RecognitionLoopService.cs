@@ -10,7 +10,6 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 {
     private readonly ICameraService              _camera;
     private readonly IAiRecognitionService       _ai;
-    private readonly IMotionDetectionService     _motion;
     private readonly IPointOfInterestService     _poi;
     private readonly IBackgroundModelService     _background;
     private readonly ISettingsService            _settings;
@@ -31,7 +30,6 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     public RecognitionLoopService(
         ICameraService              camera,
         IAiRecognitionService       ai,
-        IMotionDetectionService     motion,
         IPointOfInterestService     poi,
         IBackgroundModelService     background,
         ISettingsService            settings,
@@ -40,7 +38,6 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     {
         _camera         = camera;
         _ai             = ai;
-        _motion         = motion;
         _poi            = poi;
         _background     = background;
         _settings       = settings;
@@ -123,17 +120,6 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
         var zones = settings.MotionWhitelistZones.Count > 0
             ? (IReadOnlyList<MotionZone>)settings.MotionWhitelistZones : null;
-
-        // ── Motion pre-filter ────────────────────────────────────────────
-        if (settings.EnableLocalPreFilter)
-        {
-            if (!_motion.HasMotion(fg, settings.MotionSensitivity, settings.MotionPixelThreshold, zones))
-            {
-                _logger.LogInformation("Motion pre-filter: no motion detected, skipping AI call");
-                return;
-            }
-            _logger.LogInformation("Motion pre-filter: motion detected, proceeding to AI");
-        }
 
         // ── POI extraction ───────────────────────────────────────────────
         IReadOnlyList<PoiRegion> poiRegions = Array.Empty<PoiRegion>();

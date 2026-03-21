@@ -48,7 +48,6 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private int _frameIntervalSeconds = 30;
     [ObservableProperty] private string _capturesDirectory = "captures";
     [ObservableProperty] private double _minConfidenceThreshold = 0.7;
-    [ObservableProperty] private double _motionSensitivity = 0.5;
     [ObservableProperty] private double _motionBackgroundAlpha = 0.05;
     [ObservableProperty] private int    _motionPixelThreshold = 25;
 
@@ -115,22 +114,6 @@ public partial class SettingsViewModel : ViewModelBase
         }
     }
 
-    public string SensitivityAdvice
-    {
-        get
-        {
-            double trigger = (1.0 - MotionSensitivity) * 0.08 * 100;
-            return $"Triggers when ≥{trigger:F2}% of pixels differ from background. " +
-                   (MotionSensitivity >= 0.97
-                       ? "Very high — fires on almost any change; expect false positives."
-                       : MotionSensitivity >= 0.7
-                           ? "High — sensitive to small movement."
-                           : MotionSensitivity <= 0.3
-                               ? "Low — only large movements trigger."
-                               : "Balanced.");
-        }
-    }
-
     public string PoiSensitivityAdvice =>
         PoiSensitivity < 0.3
             ? "Conservative — detects only large, high-contrast subjects (pigeons, cats)"
@@ -151,7 +134,6 @@ public partial class SettingsViewModel : ViewModelBase
 
     partial void OnMotionBackgroundAlphaChanged(double value)  => OnPropertyChanged(nameof(AlphaAdvice));
     partial void OnFrameIntervalSecondsChanged(int value)      => OnPropertyChanged(nameof(AlphaAdvice));
-    partial void OnMotionSensitivityChanged(double value)      => OnPropertyChanged(nameof(SensitivityAdvice));
     partial void OnMotionPixelThresholdChanged(int value)      => OnPropertyChanged(nameof(PixelThresholdAdvice));
     partial void OnPoiSensitivityChanged(double value)        => OnPropertyChanged(nameof(PoiSensitivityAdvice));
 
@@ -188,7 +170,6 @@ public partial class SettingsViewModel : ViewModelBase
         FrameIntervalSeconds   = s.FrameExtractionIntervalSeconds;
         CapturesDirectory      = s.CapturesDirectory;
         MinConfidenceThreshold = s.MinConfidenceThreshold;
-        MotionSensitivity      = s.MotionSensitivity;
         MotionBackgroundAlpha  = s.MotionBackgroundAlpha;
         MotionPixelThreshold   = s.MotionPixelThreshold;
         EnablePoiExtraction    = s.EnablePoiExtraction;
@@ -281,13 +262,11 @@ public partial class SettingsViewModel : ViewModelBase
             FrameExtractionIntervalSeconds = FrameIntervalSeconds,
             CapturesDirectory              = CapturesDirectory,
             MinConfidenceThreshold         = MinConfidenceThreshold,
-            MotionSensitivity              = MotionSensitivity,
             MotionBackgroundAlpha          = MotionBackgroundAlpha,
             MotionPixelThreshold           = MotionPixelThreshold,
             AiProvider                     = AiProvider,
             ClaudeModel                    = ClaudeModel,
             GeminiModel                    = GeminiModel,
-            EnableLocalPreFilter           = true,
             EnablePoiExtraction            = EnablePoiExtraction,
             SavePoiDebugImages             = SavePoiDebugImages,
             PoiSensitivity                 = PoiSensitivity,
