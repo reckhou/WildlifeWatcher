@@ -11,4 +11,10 @@ public interface IRecognitionLoopService
     event EventHandler<bool>                         IsAnalyzingChanged;
     /// <summary>Fired every tick when POI regions are extracted (empty list clears the overlay).</summary>
     event EventHandler<IReadOnlyList<PoiRegion>>?    PoiRegionsDetected;
+    /// <summary>
+    /// Fired when detection is paused or resumed due to the daylight window gate.
+    /// True = detection allowed (window opened). False = detection paused (window closed).
+    /// Only fires on state transitions, not every tick.
+    /// </summary>
+    event EventHandler<bool> DaylightWindowChanged;
 }

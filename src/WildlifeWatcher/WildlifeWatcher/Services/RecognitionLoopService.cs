@@ -14,10 +14,12 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     private readonly IBackgroundModelService     _background;
     private readonly ISettingsService            _settings;
     private readonly ICaptureStorageService      _captureStorage;
+    private readonly ISunriseSunsetService       _daylightWindow;
     private readonly ILogger<RecognitionLoopService> _logger;
 
     private CancellationTokenSource? _cts;
     private DateTime _cooldownUntil = DateTime.MinValue;
+    private bool _wasInDaylightWindow = true;
 
     public bool IsRunning   { get; private set; }
     public bool IsAnalyzing { get; private set; }
@@ -26,6 +28,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     public event EventHandler<DetectionEvent>?               DetectionOccurred;
     public event EventHandler<bool>?                         IsAnalyzingChanged;
     public event EventHandler<IReadOnlyList<PoiRegion>>?     PoiRegionsDetected;
+    public event EventHandler<bool>?                         DaylightWindowChanged;
 
     public RecognitionLoopService(
         ICameraService              camera,
@@ -33,6 +36,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         IPointOfInterestService     poi,
         IBackgroundModelService     background,
         ISettingsService            settings,
+        ISunriseSunsetService       daylightWindow,
         ICaptureStorageService      captureStorage,
         ILogger<RecognitionLoopService> logger)
     {
@@ -41,6 +45,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         _poi            = poi;
         _background     = background;
         _settings       = settings;
+        _daylightWindow = daylightWindow;
         _captureStorage = captureStorage;
         _logger         = logger;
     }
@@ -117,6 +122,20 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
                 _background.TrainingProgress, _background.FrameCount, _background.TrainingFramesNeeded);
             return;
         }
+
+        // ── Trigger daily sunrise/sunset refresh (fire-and-forget) ───────────
+        _ = _daylightWindow.RefreshIfNeededAsync(settings);
+
+        // ── Daylight window gate ─────────────────────────────────────────────
+        if (settings.EnableDaylightDetectionOnly && !_daylightWindow.IsDetectionAllowed(settings))
+        {
+            var next = _daylightWindow.NextTransitionTime;
+            _logger.LogInformation(
+                "Outside daylight window — detection paused until {NextTransition:HH:mm}", next);
+            FireDaylightWindowChanged(false);
+            return;
+        }
+        FireDaylightWindowChanged(true);
 
         var zones = settings.MotionWhitelistZones.Count > 0
             ? (IReadOnlyList<MotionZone>)settings.MotionWhitelistZones : null;
@@ -260,5 +279,12 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     {
         IsAnalyzing = value;
         IsAnalyzingChanged?.Invoke(this, value);
+    }
+
+    private void FireDaylightWindowChanged(bool allowed)
+    {
+        if (_wasInDaylightWindow == allowed) return; // no state change — don't spam
+        _wasInDaylightWindow = allowed;
+        DaylightWindowChanged?.Invoke(this, allowed);
     }
 }
