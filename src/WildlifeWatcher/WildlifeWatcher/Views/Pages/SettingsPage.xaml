@@ -155,6 +155,58 @@
                 <Run Text="{Binding LocationName}"/>
             </TextBlock>
 
+            <!-- ═══ Daylight Detection ═══ -->
+            <TextBlock Text="Daylight Detection" Style="{StaticResource SectionHeader}"/>
+            <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <CheckBox IsChecked="{Binding EnableDaylightDetectionOnly}"
+                          VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="Only detect animals during daylight hours"
+                           FontSize="12" Foreground="#444" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="Background model training continues at all times."
+                       Style="{StaticResource Hint}"/>
+
+            <!-- Location warning (shown when toggle is on but no location is set) -->
+            <Border Padding="8,6"
+                    Background="#FFF8E1" BorderBrush="#FFD54F" BorderThickness="1"
+                    Margin="0,4,0,4"
+                    Visibility="{Binding ShowDaylightLocationWarning,
+                                 Converter={StaticResource BoolToVisibleConverter}}">
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#6D4C00">
+                    No location set — using 06:00–20:00 fallback.
+                    Set a location above for accurate sunrise/sunset times.
+                </TextBlock>
+            </Border>
+
+            <Grid Margin="0,4,0,0"
+                  IsEnabled="{Binding EnableDaylightDetectionOnly}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Sunrise offset -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Sunrise offset (minutes)" Style="{StaticResource Label}"/>
+                    <TextBlock Text="Negative = before sunrise, positive = after. Default: −30."
+                               Style="{StaticResource Hint}"/>
+                    <TextBox Text="{Binding SunriseOffsetMinutes, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource Field}"/>
+                </StackPanel>
+
+                <!-- Sunset offset -->
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Sunset offset (minutes)" Style="{StaticResource Label}"/>
+                    <TextBlock Text="Positive = after sunset, negative = before. Default: +30."
+                               Style="{StaticResource Hint}"/>
+                    <TextBox Text="{Binding SunsetOffsetMinutes, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource Field}"/>
+                </StackPanel>
+            </Grid>
+
             <!-- ═══ Data & Storage ═══ -->
             <TextBlock Text="Data &amp; Storage" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
