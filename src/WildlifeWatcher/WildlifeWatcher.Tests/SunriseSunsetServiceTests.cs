@@ -272,32 +272,65 @@ public class SunriseSunsetServiceTests
     // ── RefreshIfNeededAsync — fetch fails with prior cache ───────────────
 
     [Fact]
-    public async Task RefreshIfNeededAsync_WhenWeatherFails_WithPriorCache_KeepsFallbackFalse()
+    public async Task RefreshIfNeededAsync_WhenWeatherFails_WithPriorCache_KeepsFallbackFalseAndSuppressesRetrySameDay()
     {
-        // First call succeeds and seeds the cache
+        // First call succeeds — seeds the cache with IsUsingFallback=false
         var sunrise  = DateTime.Today.AddHours(6);
         var sunset   = DateTime.Today.AddHours(20);
         var snapshot = new WeatherSnapshot(15, "Clear", 5, 0, sunrise, sunset);
 
         var weatherMock = new Mock<IWeatherService>();
         weatherMock.SetupSequence(w => w.GetCurrentWeatherAsync(It.IsAny<double>(), It.IsAny<double>()))
-                   .ReturnsAsync(snapshot)                              // first call: success
-                   .ThrowsAsync(new HttpRequestException("gone"));     // second call: failure
+                   .ReturnsAsync(snapshot)                              // 1st call: success (seeds cache)
+                   .ThrowsAsync(new HttpRequestException("gone"));     // 2nd call: failure
 
         var svc    = new SunriseSunsetService(weatherMock.Object, NullLogger<SunriseSunsetService>.Instance);
         var config = DaylightConfig();
 
-        // First call seeds the cache
+        // Seed the cache
         await svc.RefreshIfNeededAsync(config);
         Assert.False(svc.IsUsingFallback);
 
-        // Force a "new day" by clearing the cache date via a second service instance is not possible,
-        // so we verify indirectly: a second call on the same day is a no-op (cache is current)
+        // Simulate a new day — make the cache appear stale so the next call will hit the weather service
+        svc.AdvanceDayForTesting();
+
+        // Second call: weather fails, but prior cache exists — should NOT switch to fallback, should suppress retry today
         await svc.RefreshIfNeededAsync(config);
 
-        // IsUsingFallback must still be false — we have a valid cache
-        Assert.False(svc.IsUsingFallback);
-        // Only one weather call was made (second call was a no-op due to same-day cache)
-        weatherMock.Verify(w => w.GetCurrentWeatherAsync(It.IsAny<double>(), It.IsAny<double>()), Times.Once);
+        Assert.False(svc.IsUsingFallback); // still using the prior-day cache, not the 06:00–20:00 fallback
+        weatherMock.Verify(w => w.GetCurrentWeatherAsync(It.IsAny<double>(), It.IsAny<double>()), Times.Exactly(2));
+
+        // Third call: same day — should be a no-op (cache date was advanced to today by the failure handler)
+        await svc.RefreshIfNeededAsync(config);
+        weatherMock.Verify(w => w.GetCurrentWeatherAsync(It.IsAny<double>(), It.IsAny<double>()), Times.Exactly(2)); // still 2
+    }
+
+    [Fact]
+    public async Task IsDetectionAllowed_OutsideWindow_AfterClose_NextTransitionTimeIsTomorrowStart()
+    {
+        // Use a window in the distant past (00:01–00:02) to guarantee "outside/after" at any run time
+        var sunrise = DateTime.Today.AddHours(0).AddMinutes(1); // 00:01
+        var sunset  = DateTime.Today.AddHours(0).AddMinutes(2); // 00:02
+        var snapshot = new WeatherSnapshot(15, "Clear", 5, 0, sunrise, sunset);
+
+        var weatherMock = new Mock<IWeatherService>();
+        weatherMock.Setup(w => w.GetCurrentWeatherAsync(51.5, -0.1)).ReturnsAsync(snapshot);
+
+        var svc = new SunriseSunsetService(weatherMock.Object, NullLogger<SunriseSunsetService>.Instance);
+        var config = new AppConfiguration
+        {
+            EnableDaylightDetectionOnly = true,
+            SunriseOffsetMinutes = 0,
+            SunsetOffsetMinutes  = 0,
+            Latitude  = 51.5,
+            Longitude = -0.1,
+        };
+
+        await svc.RefreshIfNeededAsync(config);
+        bool allowed = svc.IsDetectionAllowed(config); // should be outside (after) window
+
+        Assert.False(allowed);
+        var expectedNextStart = sunrise.AddDays(1); // tomorrow's start
+        Assert.Equal(expectedNextStart, svc.NextTransitionTime);
     }
 }

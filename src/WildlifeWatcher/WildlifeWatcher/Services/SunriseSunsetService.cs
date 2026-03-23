@@ -40,6 +40,9 @@ public class SunriseSunsetService : ISunriseSunsetService
     internal bool IsWithinWindowAt(DateTime now, DateTime windowStart, DateTime windowEnd)
         => now >= windowStart && now <= windowEnd;
 
+    /// <summary>For testing only — moves the cached date back one day to simulate a new day without losing cached sunrise/sunset values.</summary>
+    internal void AdvanceDayForTesting() => _cachedDate = _cachedDate.AddDays(-1);
+
     public async Task RefreshIfNeededAsync(AppConfiguration settings)
     {
         if (DateOnly.FromDateTime(DateTime.Today) == _cachedDate)
