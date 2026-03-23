@@ -22,6 +22,8 @@ public interface ICaptureStorageService
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId);
     Task DeleteCaptureAsync(int captureId);
     Task UpdateCaptureNotesAsync(int captureId, string notes);
+    Task ReassignCaptureAsync(int captureId, int newSpeciesId);
+    Task<IReadOnlyList<SpeciesSummary>> GetAllSpeciesAsync();
     Task ResetGalleryAsync(string capturesDirectory);
     Task UpdateSpeciesReferencePhotoAsync(int speciesId, string localPath);
     Task MergeSpeciesByScientificNameAsync();

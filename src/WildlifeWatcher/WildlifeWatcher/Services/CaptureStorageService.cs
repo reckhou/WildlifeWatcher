@@ -147,6 +147,19 @@ public class CaptureStorageService : ICaptureStorageService
             Sunrise          = weather?.Sunrise,
             Sunset           = weather?.Sunset,
         };
+
+        // Store source POI bounding box for zoomed thumbnail display
+        if (result.SourcePoiIndex.HasValue && poiRegions != null)
+        {
+            var srcPoi = poiRegions.FirstOrDefault(p => p.Index == result.SourcePoiIndex.Value);
+            if (srcPoi != null)
+            {
+                record.PoiNLeft   = srcPoi.NLeft;
+                record.PoiNTop    = srcPoi.NTop;
+                record.PoiNWidth  = srcPoi.NWidth;
+                record.PoiNHeight = srcPoi.NHeight;
+            }
+        }
         db.CaptureRecords.Add(record);
         await db.SaveChangesAsync();
 
@@ -287,6 +300,47 @@ public class CaptureStorageService : ICaptureStorageService
                 g => new DailySummary(
                     g.Count(),
                     g.Select(c => c.WeatherCondition).FirstOrDefault(w => w != null)));
+    }
+
+    public async Task ReassignCaptureAsync(int captureId, int newSpeciesId)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var record = await db.CaptureRecords.FindAsync(captureId);
+        if (record == null) return;
+
+        var oldSpeciesId = record.SpeciesId;
+        record.SpeciesId = newSpeciesId;
+        await db.SaveChangesAsync();
+
+        // Clean up orphaned species (one that has no captures left)
+        var oldSpeciesHasCaptures = await db.CaptureRecords.AnyAsync(c => c.SpeciesId == oldSpeciesId);
+        if (!oldSpeciesHasCaptures)
+        {
+            var orphan = await db.Species.FindAsync(oldSpeciesId);
+            if (orphan != null)
+            {
+                db.Species.Remove(orphan);
+                await db.SaveChangesAsync();
+            }
+        }
+    }
+
+    public async Task<IReadOnlyList<SpeciesSummary>> GetAllSpeciesAsync()
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.Species
+            .OrderBy(s => s.CommonName)
+            .Select(s => new SpeciesSummary(
+                s.Id,
+                s.CommonName,
+                s.ScientificName,
+                s.Description,
+                s.FirstDetectedAt,
+                s.ReferencePhotoPath,
+                s.Captures.Count,
+                s.Captures.Any() ? s.Captures.Max(c => c.CapturedAt) : s.FirstDetectedAt,
+                s.Captures.OrderByDescending(c => c.CapturedAt).Select(c => c.ImageFilePath).FirstOrDefault()))
+            .ToListAsync();
     }
 
     public async Task<IReadOnlyList<CaptureRecord>> GetCapturesByDateAsync(DateTime date)

@@ -59,6 +59,9 @@ public class AppConfiguration
     public double? Longitude    { get; set; }
     public string  LocationName { get; set; } = string.Empty;
 
+    /// <summary>Camera audio volume (0–200). Persisted across sessions.</summary>
+    public int Volume { get; set; } = 100;
+
     /// <summary>
     /// Debug option: forces the update check to return a fake available update without hitting GitHub.
     /// Set to true temporarily to test the update banner at runtime. Default: false.

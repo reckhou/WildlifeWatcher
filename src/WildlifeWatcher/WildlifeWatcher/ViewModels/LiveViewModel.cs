@@ -32,7 +32,7 @@ public partial class LiveViewModel : ViewModelBase
     [ObservableProperty] private string _connectionButtonText = "Connect";
     [ObservableProperty] private bool   _isAnalyzing;
     [ObservableProperty] private string _lastDetectionText    = "No detections yet.";
-    [ObservableProperty] private int    _volume               = 100;
+    [ObservableProperty] private int    _volume;
     [ObservableProperty] private double _trainingProgress;
     [ObservableProperty] private bool   _isTrainingComplete   = true;
     [ObservableProperty] private string _trainingStatusText   = string.Empty;
@@ -59,6 +59,8 @@ public partial class LiveViewModel : ViewModelBase
         _logger           = logger;
         _captureStorage   = captureStorage;
 
+        _volume = _settings.CurrentSettings.Volume;
+
         _camera.ConnectionStateChanged           += OnConnectionStateChanged;
         _recognitionLoop.DetectionOccurred       += OnDetectionOccurred;
         _recognitionLoop.IsAnalyzingChanged      += OnIsAnalyzingChanged;
@@ -69,7 +71,12 @@ public partial class LiveViewModel : ViewModelBase
         _ = Task.Run(() => AutoConnectLoopAsync(_cts.Token));
     }
 
-    partial void OnVolumeChanged(int value) => _camera.MediaPlayer.Volume = value;
+    partial void OnVolumeChanged(int value)
+    {
+        _camera.MediaPlayer.Volume = value;
+        _settings.CurrentSettings.Volume = value;
+        _settings.Save(_settings.CurrentSettings);
+    }
 
     partial void OnIsConnectedChanged(bool value)
     {

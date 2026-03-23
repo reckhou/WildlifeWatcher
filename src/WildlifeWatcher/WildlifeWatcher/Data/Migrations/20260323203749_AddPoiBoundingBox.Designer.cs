@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WildlifeWatcher.Data;
 
@@ -10,9 +11,11 @@ using WildlifeWatcher.Data;
 namespace WildlifeWatcher.Data.Migrations
 {
     [DbContext(typeof(WildlifeDbContext))]
-    partial class WildlifeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260323203749_AddPoiBoundingBox")]
+    partial class AddPoiBoundingBox
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");

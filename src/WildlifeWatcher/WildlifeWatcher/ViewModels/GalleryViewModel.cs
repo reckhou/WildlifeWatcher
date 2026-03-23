@@ -23,7 +23,13 @@ public partial class GalleryViewModel : ViewModelBase
     private SpeciesCardViewModel? _selectedSpecies;
     private int _photoFetchInProgress = 0; // 0 = idle, 1 = running (Interlocked flag)
 
-    [ObservableProperty] private GalleryView     _currentView = GalleryView.SpeciesList;
+    [ObservableProperty] private GalleryView     _currentView        = GalleryView.SpeciesList;
+    [ObservableProperty] private bool            _isRefreshingPhotos = false;
+    [ObservableProperty] private string          _refreshStatusText  = string.Empty;
+    [ObservableProperty] private bool            _isSelectionMode;
+
+    public bool IsNotRefreshingPhotos => !IsRefreshingPhotos;
+    public int  SelectedCount         => SelectedCaptures.Count(c => c.IsSelected);
     [ObservableProperty] private string          _searchText  = string.Empty;
     [ObservableProperty] private string          _selectedSpeciesName           = string.Empty;
     [ObservableProperty] private string          _selectedSpeciesScientificName = string.Empty;
@@ -58,6 +64,15 @@ public partial class GalleryViewModel : ViewModelBase
         _birdPhotoService = birdPhotoService;
         _logger           = logger;
         _captureStorage.CaptureSaved += OnCaptureSaved;
+    }
+
+    partial void OnIsRefreshingPhotosChanged(bool value)
+        => OnPropertyChanged(nameof(IsNotRefreshingPhotos));
+
+    partial void OnIsSelectionModeChanged(bool value)
+    {
+        if (!value) foreach (var c in SelectedCaptures) c.IsSelected = false;
+        OnPropertyChanged(nameof(SelectedCount));
     }
 
     partial void OnCurrentViewChanged(GalleryView value)
@@ -145,6 +160,90 @@ public partial class GalleryViewModel : ViewModelBase
     // ── Gallery commands ──────────────────────────────────────────────────
 
     [RelayCommand]
+    private async Task RefreshSpeciesPhotosAsync()
+    {
+        if (IsRefreshingPhotos) return;
+        IsRefreshingPhotos = true;
+        RefreshStatusText  = "Fetching photos…";
+        try
+        {
+            var summaries  = await _captureStorage.GetAllSpeciesSummariesAsync();
+            var withLatinName = summaries.Where(s => !string.IsNullOrEmpty(s.ScientificName)).ToList();
+            int done = 0;
+
+            foreach (var s in withLatinName)
+            {
+                RefreshStatusText = $"Fetching {s.CommonName}… ({done + 1}/{withLatinName.Count})";
+                var path = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName, forceRefresh: true);
+                if (path != null)
+                    await _captureStorage.UpdateSpeciesReferencePhotoAsync(s.SpeciesId, path);
+                done++;
+                await Task.Delay(1100); // polite delay between requests
+            }
+
+            await Application.Current.Dispatcher.InvokeAsync(() => LoadAsync()).Task.Unwrap();
+            RefreshStatusText = $"Updated {done} photo(s)";
+            await Task.Delay(3000);
+            RefreshStatusText = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during photo refresh");
+            RefreshStatusText = "Refresh failed";
+        }
+        finally
+        {
+            IsRefreshingPhotos = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task BatchDeleteAsync()
+    {
+        var toDelete = SelectedCaptures.Where(c => c.IsSelected).ToList();
+        if (toDelete.Count == 0) return;
+        if (MessageBox.Show($"Delete {toDelete.Count} capture(s) permanently? This cannot be undone.",
+                "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        foreach (var card in toDelete)
+            await _captureStorage.DeleteCaptureAsync(card.Record.Id);
+
+        IsSelectionMode = false;
+        await RefreshAfterBatchAsync();
+    }
+
+    [RelayCommand]
+    private async Task BatchReassignAsync()
+    {
+        var toReassign = SelectedCaptures.Where(c => c.IsSelected).ToList();
+        if (toReassign.Count == 0) return;
+
+        var allSpecies = await _captureStorage.GetAllSpeciesAsync();
+        var dialog     = new ReassignSpeciesDialog(allSpecies);
+        if (dialog.ShowDialog() != true || !dialog.SelectedSpeciesId.HasValue) return;
+
+        foreach (var card in toReassign)
+            await _captureStorage.ReassignCaptureAsync(card.Record.Id, dialog.SelectedSpeciesId.Value);
+
+        IsSelectionMode = false;
+        await RefreshAfterBatchAsync();
+    }
+
+    private async Task RefreshAfterBatchAsync()
+    {
+        await LoadAsync();
+        if (CurrentView == GalleryView.SpeciesDetail && _selectedSpecies != null)
+        {
+            var stillExists = _allSpecies.Any(s => s.Summary.SpeciesId == _selectedSpecies.Summary.SpeciesId);
+            if (!stillExists)
+                CurrentView = GalleryView.SpeciesList;
+            else
+                await LoadCapturesAsync(_selectedSpecies.Summary.SpeciesId);
+        }
+    }
+
+    [RelayCommand]
     private void Sort(string mode)
     {
         SortMode = mode switch
@@ -179,15 +278,26 @@ public partial class GalleryViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ToggleSelectionMode() => IsSelectionMode = !IsSelectionMode;
+
+    [RelayCommand]
     private void Back()
     {
-        CurrentView = GalleryView.SpeciesList;
+        IsSelectionMode  = false;
+        CurrentView      = GalleryView.SpeciesList;
         _selectedSpecies = null;
     }
 
     [RelayCommand]
     private async Task OpenCapture(CaptureCardViewModel card)
     {
+        if (IsSelectionMode)
+        {
+            card.IsSelected = !card.IsSelected;
+            OnPropertyChanged(nameof(SelectedCount));
+            return;
+        }
+
         var dialog = new CaptureDetailDialog(card.Record, _captureStorage);
         dialog.ShowDialog();
 

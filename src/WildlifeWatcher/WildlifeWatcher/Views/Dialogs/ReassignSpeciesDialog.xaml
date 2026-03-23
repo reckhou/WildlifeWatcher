@@ -1,0 +1,51 @@
+<Window x:Class="WildlifeWatcher.Views.Dialogs.ReassignSpeciesDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Reassign to Species" Width="420" Height="480"
+        ResizeMode="CanResize" WindowStartupLocation="CenterOwner"
+        Background="#F5F5F0">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Reassign capture to a different species"
+                   FontSize="13" FontWeight="SemiBold" Foreground="#2D5A27" Margin="0,0,0,10"/>
+
+        <!-- Search box -->
+        <TextBox Grid.Row="1" x:Name="SearchBox"
+                 Padding="8,6" FontSize="12" BorderBrush="#CCCCCC"
+                 TextChanged="SearchBox_TextChanged"
+                 Margin="0,0,0,8"/>
+
+        <!-- Species list -->
+        <ListBox Grid.Row="2" x:Name="SpeciesList"
+                 BorderBrush="#CCCCCC" BorderThickness="1"
+                 SelectionChanged="SpeciesList_SelectionChanged">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="4,3">
+                        <TextBlock Text="{Binding CommonName}" FontWeight="SemiBold" FontSize="12"/>
+                        <TextBlock Text="{Binding ScientificName}" FontStyle="Italic"
+                                   FontSize="10" Foreground="#888"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Action buttons -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Cancel" Click="Cancel_Click"
+                    Background="White" Foreground="#555" BorderBrush="#CCCCCC"
+                    BorderThickness="1" Padding="14,6" FontSize="12"
+                    Cursor="Hand" Margin="0,0,8,0"/>
+            <Button x:Name="AssignButton" Content="Assign" Click="Assign_Click"
+                    Background="#2D5A27" Foreground="White"
+                    BorderThickness="0" Padding="14,6"
+                    Cursor="Hand" FontSize="12" IsEnabled="False"/>
+        </StackPanel>
+    </Grid>
+</Window>

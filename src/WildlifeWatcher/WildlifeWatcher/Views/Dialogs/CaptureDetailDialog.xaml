@@ -68,6 +68,11 @@
                             Background="#2D5A27" Foreground="White"
                             BorderThickness="0" Padding="10,6"
                             Cursor="Hand" FontSize="12" Margin="0,0,0,4"/>
+                    <Button Content="Reassign" Click="Reassign_Click"
+                            Background="#555555" Foreground="White"
+                            BorderThickness="0" Padding="10,6"
+                            Cursor="Hand" FontSize="12" Margin="0,0,0,4"
+                            ToolTip="Assign this capture to a different species"/>
                     <Button Content="Delete" Click="Delete_Click"
                             Background="#C0392B" Foreground="White"
                             BorderThickness="0" Padding="10,6"

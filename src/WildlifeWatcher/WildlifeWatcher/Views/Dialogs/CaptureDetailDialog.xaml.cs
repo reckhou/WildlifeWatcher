@@ -118,6 +118,18 @@ public partial class CaptureDetailDialog : Window
         Title = _record.Species.CommonName + " ✓";
     }
 
+    private async void Reassign_Click(object sender, RoutedEventArgs e)
+    {
+        var allSpecies = await _storage.GetAllSpeciesAsync();
+        var dialog = new ReassignSpeciesDialog(allSpecies) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.SelectedSpeciesId.HasValue)
+        {
+            await _storage.ReassignCaptureAsync(_record.Id, dialog.SelectedSpeciesId.Value);
+            DialogResult = true;
+            Close();
+        }
+    }
+
     private async void Delete_Click(object sender, RoutedEventArgs e)
     {
         if (MessageBox.Show("Delete this capture permanently?", "Confirm Delete",
