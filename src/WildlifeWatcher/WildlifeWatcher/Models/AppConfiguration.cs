@@ -50,6 +50,20 @@ public class AppConfiguration
     /// </summary>
     public int MotionPixelThreshold { get; set; } = 25;
 
+    /// <summary>
+    /// Minimum per-pixel temporal delta (0–255) to count as "motion" (frame-to-frame change).
+    /// Required in addition to foreground difference to mark a cell as hot.
+    /// Range: 3–30. Default 8 (filters static shadows while detecting actual motion).
+    /// </summary>
+    public int MotionTemporalThreshold { get; set; } = 8;
+
+    /// <summary>
+    /// Fraction of changed pixels (via temporal delta) required in a cell to mark it as temporally hot.
+    /// Required in addition to foreground hot fraction. Lower = more sensitive to motion.
+    /// Range: 0.03–0.25. Default 0.10.
+    /// </summary>
+    public double MotionTemporalCellFraction { get; set; } = 0.10;
+
     public List<MotionZone> MotionWhitelistZones { get; set; } = new();
 
     public string DatabasePath { get; set; } = string.Empty;

@@ -28,12 +28,15 @@ public class BackgroundModelService : IBackgroundModelService
     private readonly ISettingsService _settings;
     private float[]? _background;
     private float[]? _foreground;
+    private byte[]? _previousGray;
+    private float[]? _temporalDelta;
     private int _frameCount;
     private bool _skipGate;
 
     public DateTime? SavedAt { get; private set; }
 
     public float[]? Foreground => _foreground;
+    public float[]? TemporalDelta => _temporalDelta;
     public int Width  => W;
     public int Height => H;
 
@@ -63,14 +66,21 @@ public class BackgroundModelService : IBackgroundModelService
         {
             _background = Array.ConvertAll(gray, b => (float)b);
             _foreground = new float[W * H];
+            _temporalDelta = new float[W * H];
+            _previousGray = gray;
             return;
         }
 
         for (int i = 0; i < gray.Length; i++)
         {
             _foreground![i] = Math.Abs(gray[i] - _background[i]);
+            _temporalDelta![i] = _previousGray != null
+                ? Math.Abs(gray[i] - _previousGray[i])
+                : 0f;
             _background[i]  = (float)(alpha * gray[i] + (1 - alpha) * _background[i]);
         }
+
+        _previousGray = gray;
 
         _frameCount++;
         SavedAt = DateTime.UtcNow;
@@ -81,6 +91,8 @@ public class BackgroundModelService : IBackgroundModelService
     {
         _background = null;
         _foreground = null;
+        _previousGray = null;
+        _temporalDelta = null;
         _frameCount = 0;
         _skipGate   = false;
         SavedAt     = null;
@@ -133,6 +145,8 @@ public class BackgroundModelService : IBackgroundModelService
 
             _background = bg;
             _foreground = new float[W * H];
+            _temporalDelta = new float[W * H];
+            _previousGray = null; // Will be set on first ProcessFrame after load
             _frameCount = savedFrameCount;
             _skipGate   = true; // data is fresh enough — skip the adaptation wait
             SavedAt     = savedAt;

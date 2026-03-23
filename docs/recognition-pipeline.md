@@ -31,7 +31,11 @@ background[i] = α * gray[i] + (1-α) * background[i]
 
 If `EnablePoiExtraction` is on, this turns the foreground mask into a set of cropped JPEG regions to send to AI instead of the full frame:
 
-1. **Build a 32×24 hot-cell grid** — each cell covers a 5×5 pixel block in the 160×120 foreground. A cell is "hot" if enough of its pixels exceed the threshold (threshold is derived from `PoiSensitivity`).
+1. **Build a 32×24 hot-cell grid** — each cell covers a 5×5 pixel block in the 160×120 foreground. A cell is "hot" only if **both** conditions are met:
+   - **Foreground condition**: enough pixels exceed `MotionPixelThreshold` (significant difference from EMA background)
+   - **Temporal condition**: enough pixels exceed `MotionTemporalThreshold` (significant frame-to-frame change, indicating actual motion)
+
+   This dual requirement eliminates static false positives (shadows, reflections, camera noise) while preserving detection of low-contrast moving subjects.
 
 2. **Mask out cells outside whitelist zones** (if configured).
 

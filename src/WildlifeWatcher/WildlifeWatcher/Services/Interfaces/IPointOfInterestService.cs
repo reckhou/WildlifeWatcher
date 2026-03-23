@@ -14,5 +14,8 @@ public interface IPointOfInterestService
     IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame,
                                              IReadOnlyList<MotionZone>? whitelistZones = null,
                                              int pixelThreshold = 25,
-                                             double poiSensitivity = 0.5);
+                                             double poiSensitivity = 0.5,
+                                             float[]? temporalDelta = null,
+                                             int temporalThreshold = 8,
+                                             double temporalCellFraction = 0.10);
 }

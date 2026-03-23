@@ -112,6 +112,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         // ── Update background model ──────────────────────────────────────
         _background.ProcessFrame(currentFrame);
         var fg = _background.Foreground;
+        var temporalDelta = _background.TemporalDelta;
         if (fg == null) return; // first frame — no background established yet
 
         // ── Training gate: defer POI + AI until background model is ready ─
@@ -144,7 +145,8 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         IReadOnlyList<PoiRegion> poiRegions = Array.Empty<PoiRegion>();
         if (settings.EnablePoiExtraction)
         {
-            poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold, settings.PoiSensitivity);
+            poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold, settings.PoiSensitivity,
+                temporalDelta, settings.MotionTemporalThreshold, settings.MotionTemporalCellFraction);
             _logger.LogInformation("POI extraction: {Count} region(s) found", poiRegions.Count);
             PoiRegionsDetected?.Invoke(this, poiRegions);
 

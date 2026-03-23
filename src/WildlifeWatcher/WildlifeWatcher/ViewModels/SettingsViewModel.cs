@@ -50,6 +50,8 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private double _minConfidenceThreshold = 0.7;
     [ObservableProperty] private double _motionBackgroundAlpha = 0.05;
     [ObservableProperty] private int    _motionPixelThreshold = 25;
+    [ObservableProperty] private int    _motionTemporalThreshold = 8;
+    [ObservableProperty] private double _motionTemporalCellFraction = 0.10;
 
     // Data & Storage
     [ObservableProperty] private string _databasePath = string.Empty;
@@ -137,12 +139,20 @@ public partial class SettingsViewModel : ViewModelBase
                     ? $"Current: {MotionPixelThreshold} — good balance. Ignores sensor noise/JPEG artefacts; detects real movement reliably. Recommended range: 20–30."
                     : $"Current: {MotionPixelThreshold} — high threshold; only strong contrast changes trigger. May miss small or camouflaged subjects.";
 
+    public string TemporalThresholdAdvice =>
+        MotionTemporalThreshold <= 5
+            ? $"Warning: {MotionTemporalThreshold} is very low — may detect static shadows as motion. Recommended: 6–15."
+            : MotionTemporalThreshold <= 12
+                ? $"Current: {MotionTemporalThreshold} — good balance. Filters static shadows while detecting actual movement. Recommended range: 6–15."
+                : $"Current: {MotionTemporalThreshold} — high threshold; only fast motion detected. May miss slow-moving subjects.";
+
     public bool ShowDaylightLocationWarning =>
         EnableDaylightDetectionOnly && string.IsNullOrWhiteSpace(LocationName) && _selectedLatitude is null;
 
     partial void OnMotionBackgroundAlphaChanged(double value)  => OnPropertyChanged(nameof(AlphaAdvice));
     partial void OnFrameIntervalSecondsChanged(int value)      => OnPropertyChanged(nameof(AlphaAdvice));
     partial void OnMotionPixelThresholdChanged(int value)      => OnPropertyChanged(nameof(PixelThresholdAdvice));
+    partial void OnMotionTemporalThresholdChanged(int value)    => OnPropertyChanged(nameof(TemporalThresholdAdvice));
     partial void OnPoiSensitivityChanged(double value)        => OnPropertyChanged(nameof(PoiSensitivityAdvice));
 
     partial void OnEnableDaylightDetectionOnlyChanged(bool value) =>
@@ -186,6 +196,8 @@ public partial class SettingsViewModel : ViewModelBase
         MinConfidenceThreshold = s.MinConfidenceThreshold;
         MotionBackgroundAlpha  = s.MotionBackgroundAlpha;
         MotionPixelThreshold   = s.MotionPixelThreshold;
+        MotionTemporalThreshold = s.MotionTemporalThreshold;
+        MotionTemporalCellFraction = s.MotionTemporalCellFraction;
         EnablePoiExtraction    = s.EnablePoiExtraction;
         SavePoiDebugImages     = s.SavePoiDebugImages;
         PoiSensitivity         = s.PoiSensitivity;
@@ -281,6 +293,8 @@ public partial class SettingsViewModel : ViewModelBase
             MinConfidenceThreshold         = MinConfidenceThreshold,
             MotionBackgroundAlpha          = MotionBackgroundAlpha,
             MotionPixelThreshold           = MotionPixelThreshold,
+            MotionTemporalThreshold        = MotionTemporalThreshold,
+            MotionTemporalCellFraction     = MotionTemporalCellFraction,
             AiProvider                     = AiProvider,
             ClaudeModel                    = ClaudeModel,
             GeminiModel                    = GeminiModel,

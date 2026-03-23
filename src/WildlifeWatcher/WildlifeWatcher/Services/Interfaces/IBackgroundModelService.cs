@@ -8,6 +8,9 @@ public interface IBackgroundModelService
     /// <summary>Per-pixel foreground intensity (0–255). Null until first frame processed.</summary>
     float[]? Foreground { get; }
 
+    /// <summary>Per-pixel temporal delta (0–255) — absolute frame-to-frame difference. Null until second frame processed.</summary>
+    float[]? TemporalDelta { get; }
+
     int Width  { get; }  // 160
     int Height { get; } // 120
 

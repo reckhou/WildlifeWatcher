@@ -96,6 +96,18 @@
                        FontSize="10" Foreground="#888" TextWrapping="Wrap"
                        Margin="0,2,0,6"/>
 
+            <TextBlock Text="Temporal motion threshold (3 = subtle … 30 = strong motion)" Style="{StaticResource Label}"/>
+            <Slider Value="{Binding MotionTemporalThreshold}"
+                    Minimum="3" Maximum="30"
+                    TickFrequency="1" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding MotionTemporalThreshold, StringFormat={}{0}}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+            <TextBlock Text="{Binding TemporalThresholdAdvice}"
+                       FontSize="10" Foreground="#888" TextWrapping="Wrap"
+                       Margin="0,2,0,6"/>
+
             <TextBlock Text="Background model alpha (0.01 slow … 0.20 fast)" Style="{StaticResource Label}"/>
             <Slider Value="{Binding MotionBackgroundAlpha}"
                     Minimum="0.01" Maximum="0.20" TickFrequency="0.01"

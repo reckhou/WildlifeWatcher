@@ -27,7 +27,10 @@ public class PointOfInterestService : IPointOfInterestService
     public IReadOnlyList<PoiRegion> ExtractRegions(float[] foreground, byte[] currentFrame,
                                                      IReadOnlyList<MotionZone>? whitelistZones = null,
                                                      int pixelThreshold = 25,
-                                                     double poiSensitivity = 0.5)
+                                                     double poiSensitivity = 0.5,
+                                                     float[]? temporalDelta = null,
+                                                     int temporalThreshold = 8,
+                                                     double temporalCellFraction = 0.10)
     {
         // ── 0. Derive POI parameters from sensitivity ───────────────────────
         double cellHotFraction = 0.16 - 0.12 * poiSensitivity;       // 0.16 → 0.04
@@ -41,14 +44,19 @@ public class PointOfInterestService : IPointOfInterestService
         {
             for (int col = 0; col < GridCols; col++)
             {
-                int changed = 0;
+                int foregroundChanged = 0;
+                int temporalChanged = 0;
                 for (int py = 0; py < 5; py++)
                 for (int px = 0; px < 5; px++)
                 {
                     int idx = (row * 5 + py) * ScaleWidth + (col * 5 + px);
-                    if (foreground[idx] > pixelThreshold) changed++;
+                    if (foreground[idx] > pixelThreshold) foregroundChanged++;
+                    if (temporalDelta != null && temporalDelta[idx] > temporalThreshold) temporalChanged++;
                 }
-                hotCells[row, col] = changed >= cellPixels * cellHotFraction;
+                // Both conditions must be met: foreground diff AND temporal motion
+                bool hasForeground = foregroundChanged >= cellPixels * cellHotFraction;
+                bool hasTemporal = temporalDelta != null && temporalChanged >= cellPixels * temporalCellFraction;
+                hotCells[row, col] = hasForeground && hasTemporal;
             }
         }
 
