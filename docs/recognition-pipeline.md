@@ -92,6 +92,21 @@ For each `detected: true` result:
 
 ---
 
+## Step 2.5 — Daylight window gate (`SunriseSunsetService`)
+
+If `EnableDaylightDetectionOnly` is `true`, this gate blocks AI detection outside the configured window. Background model updates and training always continue regardless.
+
+**Detection window:** `[sunrise + SunriseOffsetMinutes, sunset + SunsetOffsetMinutes]`
+
+- Sunrise/sunset fetched from Open-Meteo once per calendar day (fire-and-forget, cached)
+- No location configured → 06:00–20:00 local fallback; `IsUsingFallback = true`
+- Weather fetch fails → reuse yesterday's cache; if no cache, use 06:00–20:00 fallback
+- Sign convention: negative offset = before the base time, positive = after
+
+When blocked, fires `DaylightWindowChanged(false)` on the first blocked tick. Fires `DaylightWindowChanged(true)` when detection resumes.
+
+---
+
 ## Summary
 
 ```
@@ -99,6 +114,8 @@ tick (every N seconds)
   → extract frame
   → update EMA background model
   → [gate: training complete?]
+  → trigger daily sunrise/sunset refresh (fire-and-forget)
+  → [gate: daylight window?]           ← SunriseSunsetService
   → extract POI crops             ← PointOfInterestService BFS on hot-cell grid
   → [gate: POI count > 0?]
   → [gate: cooldown expired?]
