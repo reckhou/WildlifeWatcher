@@ -24,6 +24,7 @@ public partial class LiveViewModel : ViewModelBase
     private readonly ISettingsService        _settings;
     private readonly ILogger<LiveViewModel>  _logger;
     private readonly ICaptureStorageService  _captureStorage;
+    private readonly ISunriseSunsetService   _daylightWindow;
     private readonly CancellationTokenSource _cts = new();
     private bool _userInitiatedDisconnect;
 
@@ -38,6 +39,8 @@ public partial class LiveViewModel : ViewModelBase
     [ObservableProperty] private string _trainingStatusText   = string.Empty;
     [ObservableProperty] private string _trainingTimeLeftText = string.Empty;
     [ObservableProperty] private string _modelDataAgeText     = string.Empty;
+    [ObservableProperty] private string _daylightStatusText   = string.Empty;
+    [ObservableProperty] private string _daylightFallbackText = string.Empty;
 
     public MediaPlayer MediaPlayer => _camera.MediaPlayer;
     public ObservableCollection<DetectionEvent>   RecentDetections { get; } = new();
@@ -50,7 +53,8 @@ public partial class LiveViewModel : ViewModelBase
         IBackgroundModelService  backgroundModel,
         ISettingsService         settings,
         ILogger<LiveViewModel>   logger,
-        ICaptureStorageService   captureStorage)
+        ICaptureStorageService   captureStorage,
+        ISunriseSunsetService    daylightWindow)
     {
         _camera           = camera;
         _recognitionLoop  = recognitionLoop;
@@ -58,6 +62,7 @@ public partial class LiveViewModel : ViewModelBase
         _settings         = settings;
         _logger           = logger;
         _captureStorage   = captureStorage;
+        _daylightWindow   = daylightWindow;
 
         _volume = _settings.CurrentSettings.Volume;
 
@@ -66,6 +71,7 @@ public partial class LiveViewModel : ViewModelBase
         _recognitionLoop.IsAnalyzingChanged      += OnIsAnalyzingChanged;
         _recognitionLoop.PoiRegionsDetected      += OnPoiRegionsDetected;
         _backgroundModel.TrainingProgressChanged += OnTrainingProgressChanged;
+        _recognitionLoop.DaylightWindowChanged   += OnDaylightWindowChanged;
         InMemoryLogSink.EntryAdded               += OnLogEntryAdded;
 
         _ = Task.Run(() => AutoConnectLoopAsync(_cts.Token));
@@ -277,6 +283,28 @@ public partial class LiveViewModel : ViewModelBase
             TrainingTimeLeftText = IsTrainingComplete ? string.Empty : ComputeTimeLeftText();
             if (IsTrainingComplete)
                 ModelDataAgeText = ComputeModelDataAgeText();
+        });
+    }
+
+    private void OnDaylightWindowChanged(object? sender, bool allowed)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (allowed)
+            {
+                DaylightStatusText   = string.Empty;
+                DaylightFallbackText = _daylightWindow.IsUsingFallback
+                    ? "Daylight window active (no location set — using 06:00–20:00 fallback)"
+                    : string.Empty;
+            }
+            else
+            {
+                var next = _daylightWindow.NextTransitionTime;
+                DaylightStatusText   = $"Detection paused — outside daylight window (next: {next:HH:mm})";
+                DaylightFallbackText = _daylightWindow.IsUsingFallback
+                    ? "No location set — using 06:00–20:00 fallback"
+                    : string.Empty;
+            }
         });
     }
 

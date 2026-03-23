@@ -236,6 +236,16 @@
                                 <TextBlock Text="Analyzing..." Foreground="#AAAAAA" FontSize="11"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
+                            <TextBlock Text="{Binding DaylightStatusText}"
+                                       FontSize="11" Foreground="#E65100" TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Visibility="{Binding DaylightStatusText,
+                                                    Converter={StaticResource NullOrEmptyToCollapsedConverter}}"/>
+                            <TextBlock Text="{Binding DaylightFallbackText}"
+                                       FontSize="11" Foreground="#8D6E00" TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       Visibility="{Binding DaylightFallbackText,
+                                                    Converter={StaticResource NullOrEmptyToCollapsedConverter}}"/>
                         </StackPanel>
                     </Border>
 
