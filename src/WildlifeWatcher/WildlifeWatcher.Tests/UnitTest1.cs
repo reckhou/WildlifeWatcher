@@ -14,4 +14,14 @@ public class AppConfigurationTests
         Assert.Equal(0.7, config.MinConfidenceThreshold);
         Assert.Equal(AiProvider.Claude, config.AiProvider);
     }
+
+    [Fact]
+    public void AppConfiguration_DaylightDefaults_AreCorrect()
+    {
+        var config = new AppConfiguration();
+
+        Assert.False(config.EnableDaylightDetectionOnly);
+        Assert.Equal(-30, config.SunriseOffsetMinutes);
+        Assert.Equal(30,  config.SunsetOffsetMinutes);
+    }
 }

@@ -68,6 +68,25 @@ public class AppConfiguration
     /// </summary>
     public bool DebugForceUpdateAvailable { get; set; } = false;
 
+    /// <summary>
+    /// When true, AI detection only runs within the daylight window
+    /// [sunrise + SunriseOffsetMinutes, sunset + SunsetOffsetMinutes].
+    /// Background model training continues unconditionally.
+    /// </summary>
+    public bool EnableDaylightDetectionOnly { get; set; } = false;
+
+    /// <summary>
+    /// Minutes offset applied to sunrise. Negative = before sunrise, positive = after.
+    /// Default: -30 (start detecting 30 minutes before sunrise).
+    /// </summary>
+    public int SunriseOffsetMinutes { get; set; } = -30;
+
+    /// <summary>
+    /// Minutes offset applied to sunset. Positive = after sunset, negative = before.
+    /// Default: 30 (stop detecting 30 minutes after sunset).
+    /// </summary>
+    public int SunsetOffsetMinutes { get; set; } = 30;
+
     public string GetEffectiveDatabasePath() =>
         string.IsNullOrWhiteSpace(DatabasePath)
             ? Path.Combine(Environment.GetFolderPath(
