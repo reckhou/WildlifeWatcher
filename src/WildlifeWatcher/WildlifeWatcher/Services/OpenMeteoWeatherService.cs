@@ -41,8 +41,10 @@ public class OpenMeteoWeatherService : IWeatherService
             var sunriseStr = daily.GetProperty("sunrise")[0].GetString();
             var sunsetStr  = daily.GetProperty("sunset")[0].GetString();
 
-            DateTime? sunrise = sunriseStr is not null ? DateTime.Parse(sunriseStr) : null;
-            DateTime? sunset  = sunsetStr  is not null ? DateTime.Parse(sunsetStr)  : null;
+            DateTime? sunrise = sunriseStr is not null
+                ? DateTime.SpecifyKind(DateTime.Parse(sunriseStr), DateTimeKind.Local) : null;
+            DateTime? sunset  = sunsetStr  is not null
+                ? DateTime.SpecifyKind(DateTime.Parse(sunsetStr),  DateTimeKind.Local) : null;
 
             return new WeatherSnapshot(temp, WmoToCondition(code), wind, precip, sunrise, sunset);
         }
