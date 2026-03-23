@@ -13,6 +13,12 @@
     <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>WildlifeWatcher.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- Embed AppIcon.ico as a WPF resource so Window.Icon can reference it via pack URI -->
   <ItemGroup>
     <Resource Include="Resources\AppIcon.ico" />
