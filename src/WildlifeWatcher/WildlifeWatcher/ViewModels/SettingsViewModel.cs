@@ -66,6 +66,11 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private bool _savePoiDebugImages  = true;
     [ObservableProperty] private double _poiSensitivity    = 0.5;
 
+    // Daylight detection
+    [ObservableProperty] private bool _enableDaylightDetectionOnly;
+    [ObservableProperty] private int  _sunriseOffsetMinutes = -30;
+    [ObservableProperty] private int  _sunsetOffsetMinutes  = 30;
+
     // Location (Phase 6)
     [ObservableProperty] private string _locationQuery        = string.Empty;
     [ObservableProperty] private string _locationSearchStatus = string.Empty;
@@ -132,10 +137,19 @@ public partial class SettingsViewModel : ViewModelBase
                     ? $"Current: {MotionPixelThreshold} — good balance. Ignores sensor noise/JPEG artefacts; detects real movement reliably. Recommended range: 20–30."
                     : $"Current: {MotionPixelThreshold} — high threshold; only strong contrast changes trigger. May miss small or camouflaged subjects.";
 
+    public bool ShowDaylightLocationWarning =>
+        EnableDaylightDetectionOnly && string.IsNullOrWhiteSpace(LocationName) && _selectedLatitude is null;
+
     partial void OnMotionBackgroundAlphaChanged(double value)  => OnPropertyChanged(nameof(AlphaAdvice));
     partial void OnFrameIntervalSecondsChanged(int value)      => OnPropertyChanged(nameof(AlphaAdvice));
     partial void OnMotionPixelThresholdChanged(int value)      => OnPropertyChanged(nameof(PixelThresholdAdvice));
     partial void OnPoiSensitivityChanged(double value)        => OnPropertyChanged(nameof(PoiSensitivityAdvice));
+
+    partial void OnEnableDaylightDetectionOnlyChanged(bool value) =>
+        OnPropertyChanged(nameof(ShowDaylightLocationWarning));
+
+    partial void OnLocationNameChanged(string value) =>
+        OnPropertyChanged(nameof(ShowDaylightLocationWarning));
 
     public SettingsViewModel(
         ISettingsService   settingsService,
@@ -184,6 +198,9 @@ public partial class SettingsViewModel : ViewModelBase
         _selectedLongitude           = s.Longitude;
         LocationName                 = s.LocationName;
         _debugForceUpdateAvailable   = s.DebugForceUpdateAvailable;
+        EnableDaylightDetectionOnly = s.EnableDaylightDetectionOnly;
+        SunriseOffsetMinutes        = s.SunriseOffsetMinutes;
+        SunsetOffsetMinutes         = s.SunsetOffsetMinutes;
 
         _savedCapturesDirectory = s.CapturesDirectory;
         _savedDatabasePath      = s.DatabasePath;
@@ -276,6 +293,9 @@ public partial class SettingsViewModel : ViewModelBase
             Longitude                      = _selectedLongitude,
             LocationName                   = LocationName,
             DebugForceUpdateAvailable      = _debugForceUpdateAvailable,
+            EnableDaylightDetectionOnly = EnableDaylightDetectionOnly,
+            SunriseOffsetMinutes        = SunriseOffsetMinutes,
+            SunsetOffsetMinutes         = SunsetOffsetMinutes,
         });
         _credentialService.SaveCredentials(RtspUsername, RtspPassword, AnthropicApiKey, GeminiApiKey);
         SaveStatus = "Settings saved.";
