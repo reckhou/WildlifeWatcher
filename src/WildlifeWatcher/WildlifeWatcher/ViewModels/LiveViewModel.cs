@@ -73,6 +73,7 @@ public partial class LiveViewModel : ViewModelBase
         _backgroundModel.TrainingProgressChanged += OnTrainingProgressChanged;
         _recognitionLoop.DaylightWindowChanged   += OnDaylightWindowChanged;
         InMemoryLogSink.EntryAdded               += OnLogEntryAdded;
+        _settings.SettingsChanged                += OnSettingsChanged;
 
         _ = Task.Run(() => AutoConnectLoopAsync(_cts.Token));
     }
@@ -306,6 +307,12 @@ public partial class LiveViewModel : ViewModelBase
                     : string.Empty;
             }
         });
+    }
+
+    private void OnSettingsChanged(object? sender, AppConfiguration settings)
+    {
+        bool allowed = _daylightWindow.IsDetectionAllowed(settings);
+        OnDaylightWindowChanged(this, allowed);
     }
 
     private string ComputeModelDataAgeText()

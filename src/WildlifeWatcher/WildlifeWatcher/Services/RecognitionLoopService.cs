@@ -48,6 +48,14 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         _daylightWindow = daylightWindow;
         _captureStorage = captureStorage;
         _logger         = logger;
+
+        _settings.SettingsChanged += OnSettingsChanged;
+    }
+
+    private void OnSettingsChanged(object? sender, AppConfiguration settings)
+    {
+        bool allowed = _daylightWindow.IsDetectionAllowed(settings);
+        FireDaylightWindowChanged(allowed);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -71,6 +79,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
     public void Dispose()
     {
+        _settings.SettingsChanged -= OnSettingsChanged;
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;

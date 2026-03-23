@@ -21,6 +21,8 @@ public class SettingsService : ISettingsService
 
     public AppConfiguration CurrentSettings => _current;
 
+    public event EventHandler<AppConfiguration>? SettingsChanged;
+
     public void Save(AppConfiguration settings)
     {
         _current = settings;
@@ -28,6 +30,7 @@ public class SettingsService : ISettingsService
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(_settingsPath, json);
         _logger.LogInformation("Settings saved to {Path}", _settingsPath);
+        SettingsChanged?.Invoke(this, _current);
     }
 
     private AppConfiguration Load()
