@@ -131,6 +131,9 @@ public partial class App : Application
                         services.AddSingleton<IGeocodingService, NominatimGeocodingService>();
                         services.AddSingleton<IWeatherService, OpenMeteoWeatherService>();
 
+                        // Daylight detection window
+                        services.AddSingleton<ISunriseSunsetService, SunriseSunsetService>();
+
                         // Auto-update (Phase 7)
                         services.AddSingleton<IUpdateService, UpdateService>();
 
@@ -152,6 +155,10 @@ public partial class App : Application
 
                 splash.SetStatus("Starting services…");
                 await Task.Run(() => _host.Start());
+
+                // Pre-fetch sunrise/sunset for the daylight window gate
+                var sunriseService = _host.Services.GetRequiredService<ISunriseSunsetService>();
+                _ = sunriseService.RefreshIfNeededAsync(bootstrap.CurrentSettings);
 
                 // Apply any pending EF Core migrations on startup
                 splash.SetStatus("Checking database…");
