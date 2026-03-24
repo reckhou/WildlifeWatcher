@@ -57,6 +57,7 @@ public partial class App : Application
             .MinimumLevel.Information()
             .MinimumLevel.Override("System.Net.Http", Serilog.Events.LogEventLevel.Warning)
             .MinimumLevel.Override("System.Net.Http.HttpClient", Serilog.Events.LogEventLevel.Warning)
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning)
             .WriteTo.File(
                 Path.Combine(logDir, "wildlife-.log"),
                 rollingInterval: RollingInterval.Day,
@@ -125,6 +126,11 @@ public partial class App : Application
                         services.AddHttpClient("github", c => {
                             c.BaseAddress = new Uri("https://api.github.com/");
                             c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher");
+                        });
+                        services.AddHttpClient("wikipedia", c => {
+                            c.BaseAddress = new Uri("https://en.wikipedia.org/api/rest_v1/");
+                            c.DefaultRequestHeaders.UserAgent.ParseAdd("WildlifeWatcher/1.0 (wildlife-watcher-app)");
+                            c.Timeout = TimeSpan.FromSeconds(15);
                         });
 
                         // Weather & geocoding (Phase 6)

@@ -13,8 +13,8 @@ public class BirdPhotoService : IBirdPhotoService
     private readonly ILogger<BirdPhotoService> _logger;
     private readonly string _cacheDir;
 
-    private const int MaxRetries      = 10;
-    private const int RetryDelaySecs  = 10;
+    private const int MaxRetries     = 10;
+    private const int RetryDelaySecs = 10;
 
     public BirdPhotoService(IHttpClientFactory httpFactory, ILogger<BirdPhotoService> logger)
     {
@@ -26,28 +26,63 @@ public class BirdPhotoService : IBirdPhotoService
         Directory.CreateDirectory(_cacheDir);
     }
 
-    public async Task<string?> FetchAndCachePhotoAsync(string scientificName, bool forceRefresh = false, CancellationToken ct = default)
+    public async Task<(string? Path, bool FetchedFromNetwork, bool RateLimited)> FetchAndCachePhotoAsync(
+        string scientificName, bool forceRefresh = false, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(scientificName)) return null;
+        if (string.IsNullOrWhiteSpace(scientificName)) return (null, false, false);
 
-        var safeName  = string.Concat(scientificName.Split(Path.GetInvalidFileNameChars())).Replace(' ', '_');
-        var cachePath = Path.Combine(_cacheDir, $"{safeName}.jpg");
+        var safeName  = string.Concat(scientificName.Split(System.IO.Path.GetInvalidFileNameChars())).Replace(' ', '_');
+        var cachePath = System.IO.Path.Combine(_cacheDir, $"{safeName}.jpg");
 
-        if (!forceRefresh && File.Exists(cachePath)) return cachePath;
+        if (!forceRefresh && File.Exists(cachePath)) return (cachePath, false, false);
 
+        // Stage 1: Wikipedia REST API — curated, no API key, 200 req/sec
+        string? photoUrl = await TryGetWikipediaPhotoUrlAsync(scientificName, ct);
+        if (photoUrl != null)
+            _logger.LogInformation("Using Wikipedia photo for {Name}", scientificName);
+
+        // Stage 2: iNaturalist Taxa API fallback — fail fast on 429
+        if (photoUrl is null)
+        {
+            var (inatUrl, rateLimited) = await TryGetINaturalistTaxaPhotoUrlAsync(scientificName, ct);
+            if (rateLimited) return (null, true, true);
+            photoUrl = inatUrl;
+            if (photoUrl != null)
+                _logger.LogInformation("Using iNaturalist taxa photo for {Name}", scientificName);
+        }
+
+        if (photoUrl is null) return (null, true, false);
+
+        var http       = _httpFactory.CreateClient("inaturalist"); // absolute URLs work on any named client
+        var imageBytes = await GetBytesWithRetryAsync(http, photoUrl, ct);
+        if (imageBytes is null) return (null, true, false);
+
+        if (forceRefresh && File.Exists(cachePath))
+            File.Delete(cachePath);
+
+        await File.WriteAllBytesAsync(cachePath, imageBytes, ct);
+        _logger.LogInformation("Cached reference photo for {Name} at {Path}", scientificName, cachePath);
+        return (cachePath, true, false);
+    }
+
+    private async Task<(string? Url, bool RateLimited)> TryGetINaturalistTaxaPhotoUrlAsync(string scientificName, CancellationToken ct)
+    {
         try
         {
             var http = _httpFactory.CreateClient("inaturalist");
             var url  = $"v1/taxa?q={Uri.EscapeDataString(scientificName)}&rank=species&per_page=5";
 
-            string? response = await GetWithRetryAsync(http, url, ct);
-            if (response is null) return null;
+            var resp = await http.GetAsync(url, ct);
+            if (resp.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                _logger.LogWarning("iNaturalist rate-limited for {Name}, queuing for retry", scientificName);
+                return (null, true);
+            }
+            if (!resp.IsSuccessStatusCode) return (null, false);
 
-            using var doc = JsonDocument.Parse(response);
-            var results   = doc.RootElement.GetProperty("results");
-            if (results.GetArrayLength() == 0) return null;
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            var results = doc.RootElement.GetProperty("results");
 
-            // Try each taxon result until we download a photo successfully
             for (int i = 0; i < results.GetArrayLength(); i++)
             {
                 var taxon = results[i];
@@ -55,24 +90,44 @@ public class BirdPhotoService : IBirdPhotoService
                 if (!defaultPhoto.TryGetProperty("medium_url", out var urlProp)) continue;
 
                 var photoUrl = urlProp.GetString();
-                if (string.IsNullOrEmpty(photoUrl)) continue;
-
-                var imageBytes = await GetBytesWithRetryAsync(http, photoUrl, ct);
-                if (imageBytes is null) continue;
-
-                if (forceRefresh && File.Exists(cachePath))
-                    File.Delete(cachePath);
-
-                await File.WriteAllBytesAsync(cachePath, imageBytes, ct);
-                _logger.LogInformation("Cached reference photo for {Name} at {Path}", scientificName, cachePath);
-                return cachePath;
+                if (!string.IsNullOrEmpty(photoUrl)) return (photoUrl, false);
             }
+
+            return (null, false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "iNaturalist taxa lookup failed for {Name}", scientificName);
+            return (null, false);
+        }
+    }
+
+    private async Task<string?> TryGetWikipediaPhotoUrlAsync(string scientificName, CancellationToken ct)
+    {
+        try
+        {
+            var http = _httpFactory.CreateClient("wikipedia");
+            var resp = await http.GetAsync($"page/summary/{Uri.EscapeDataString(scientificName)}", ct);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("originalimage", out var orig) &&
+                orig.TryGetProperty("source", out var src) &&
+                !string.IsNullOrEmpty(src.GetString()))
+                return src.GetString();
+
+            if (root.TryGetProperty("thumbnail", out var thumb) &&
+                thumb.TryGetProperty("source", out var tsrc) &&
+                !string.IsNullOrEmpty(tsrc.GetString()))
+                return tsrc.GetString();
 
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to fetch reference photo for {Name}", scientificName);
+            _logger.LogDebug(ex, "Wikipedia photo lookup failed for {Name}", scientificName);
             return null;
         }
     }

@@ -111,20 +111,32 @@ public partial class GalleryViewModel : ViewModelBase
     {
         try
         {
-            var anyUpdated = false;
+            var retryQueue = new List<SpeciesSummary>();
+
             foreach (var s in missing)
             {
-                var path = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName);
+                var (path, fetchedFromNetwork, rateLimited) = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName);
+                if (rateLimited) { retryQueue.Add(s); continue; }
                 if (path != null)
                 {
                     await _captureStorage.UpdateSpeciesReferencePhotoAsync(s.SpeciesId, path);
-                    anyUpdated = true;
+                    await Application.Current.Dispatcher.InvokeAsync(() => UpdateSpeciesCard(s.SpeciesId, path));
+                }
+                if (fetchedFromNetwork) await Task.Delay(1100);
+            }
+
+            // Retry species that were skipped due to iNaturalist rate-limiting
+            foreach (var s in retryQueue)
+            {
+                await Task.Delay(5000); // allow rate-limit window to recover before each retry
+                var (path, _, _) = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName);
+                if (path != null)
+                {
+                    await _captureStorage.UpdateSpeciesReferencePhotoAsync(s.SpeciesId, path);
+                    await Application.Current.Dispatcher.InvokeAsync(() => UpdateSpeciesCard(s.SpeciesId, path));
                 }
                 await Task.Delay(1100);
             }
-
-            if (anyUpdated)
-                await Application.Current.Dispatcher.InvokeAsync(() => LoadAsync()).Task.Unwrap();
         }
         catch (Exception ex)
         {
@@ -134,6 +146,21 @@ public partial class GalleryViewModel : ViewModelBase
         {
             Interlocked.Exchange(ref _photoFetchInProgress, 0);
         }
+    }
+
+    private void UpdateSpeciesCard(int speciesId, string newPhotoPath)
+    {
+        var idx = _allSpecies.FindIndex(c => c.Summary.SpeciesId == speciesId);
+        if (idx < 0) return;
+        var newCard = new SpeciesCardViewModel(_allSpecies[idx].Summary with { ReferencePhotoPath = newPhotoPath });
+        var oldCard = _allSpecies[idx];
+        _allSpecies[idx] = newCard;
+
+        // Replace the single item in FilteredSpecies directly — avoids a full Clear+rebuild
+        // and gives WPF a targeted Replace notification so the card redraws immediately.
+        var filteredIdx = FilteredSpecies.IndexOf(oldCard);
+        if (filteredIdx >= 0)
+            FilteredSpecies[filteredIdx] = newCard;
     }
 
     private void ApplyFilter()
@@ -171,14 +198,34 @@ public partial class GalleryViewModel : ViewModelBase
             var withLatinName = summaries.Where(s => !string.IsNullOrEmpty(s.ScientificName)).ToList();
             int done = 0;
 
+            var retryQueue = new List<SpeciesSummary>();
+
             foreach (var s in withLatinName)
             {
                 RefreshStatusText = $"Fetching {s.CommonName}… ({done + 1}/{withLatinName.Count})";
-                var path = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName, forceRefresh: true);
+                var (path, fetchedFromNetwork, rateLimited) = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName, forceRefresh: true);
+                if (rateLimited) { retryQueue.Add(s); done++; continue; }
                 if (path != null)
+                {
                     await _captureStorage.UpdateSpeciesReferencePhotoAsync(s.SpeciesId, path);
+                    UpdateSpeciesCard(s.SpeciesId, path);
+                }
                 done++;
-                await Task.Delay(1100); // polite delay between requests
+                if (fetchedFromNetwork) await Task.Delay(1100);
+            }
+
+            // Retry rate-limited species
+            foreach (var s in retryQueue)
+            {
+                RefreshStatusText = $"Retrying {s.CommonName}… (rate-limit recovery)";
+                await Task.Delay(5000);
+                var (path, _, _) = await _birdPhotoService.FetchAndCachePhotoAsync(s.ScientificName, forceRefresh: true);
+                if (path != null)
+                {
+                    await _captureStorage.UpdateSpeciesReferencePhotoAsync(s.SpeciesId, path);
+                    UpdateSpeciesCard(s.SpeciesId, path);
+                }
+                await Task.Delay(1100);
             }
 
             await Application.Current.Dispatcher.InvokeAsync(() => LoadAsync()).Task.Unwrap();

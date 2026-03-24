@@ -21,9 +21,9 @@ public partial class CaptureCardViewModel : ObservableObject
     public CaptureCardViewModel(CaptureRecord record)
     {
         Record = record;
-        DisplayImagePath = record.AnnotatedImageFilePath is { Length: > 0 } p && File.Exists(p)
-            ? p
-            : record.ImageFilePath;
+        DisplayImagePath = File.Exists(record.ImageFilePath)
+            ? record.ImageFilePath
+            : record.AnnotatedImageFilePath is { Length: > 0 } p && File.Exists(p) ? p : record.ImageFilePath;
     }
 
     /// <summary>
