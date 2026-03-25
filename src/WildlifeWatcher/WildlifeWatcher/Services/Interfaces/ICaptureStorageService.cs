@@ -20,6 +20,7 @@ public interface ICaptureStorageService
     Task SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null, DateTime? batchStartedAt = null);
     Task<IReadOnlyList<SpeciesSummary>> GetAllSpeciesSummariesAsync();
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId);
+    Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId, int skip, int take);
     Task DeleteCaptureAsync(int captureId);
     Task UpdateCaptureNotesAsync(int captureId, string notes);
     Task ReassignCaptureAsync(int captureId, int newSpeciesId);

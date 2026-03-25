@@ -18,6 +18,16 @@ public partial class CaptureCardViewModel : ObservableObject
 
     [ObservableProperty] private bool _isSelected;
 
+    // Caps concurrent thumbnail decodes so the thread pool is not starved by 60 simultaneous
+    // Task.Run calls. Below-fold images now load in orderly batches instead of waiting for
+    // the pool's 500ms thread-injection interval.
+    private static readonly SemaphoreSlim _loadSemaphore =
+        new(Math.Max(Environment.ProcessorCount, 4), Math.Max(Environment.ProcessorCount, 4));
+
+    // Async thumbnail backing — starts null, loads on background thread on first access
+    private BitmapSource? _thumbnailSource;
+    private int _thumbnailLoaded; // Interlocked flag: 0 = not started, 1 = started
+
     public CaptureCardViewModel(CaptureRecord record)
     {
         Record = record;
@@ -29,42 +39,64 @@ public partial class CaptureCardViewModel : ObservableObject
     /// <summary>
     /// Returns a cropped BitmapSource zoomed to the source POI region when bounding box data
     /// is available, otherwise returns the full annotated/original image. Used for gallery thumbnails.
+    /// Loads asynchronously — returns null on first access and notifies when ready.
     /// </summary>
     public BitmapSource? ThumbnailSource
     {
         get
         {
-            var path = DisplayImagePath;
-            if (!File.Exists(path)) return null;
-
-            try
-            {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource   = new Uri(path, UriKind.Absolute);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                if (!Record.PoiNLeft.HasValue)
-                    bmp.DecodePixelWidth = 200;
-                bmp.EndInit();
-                bmp.Freeze();
-
-                if (!Record.PoiNLeft.HasValue) return bmp;
-
-                int x = (int)(Record.PoiNLeft.Value   * bmp.PixelWidth);
-                int y = (int)(Record.PoiNTop!.Value   * bmp.PixelHeight);
-                int w = (int)(Record.PoiNWidth!.Value  * bmp.PixelWidth);
-                int h = (int)(Record.PoiNHeight!.Value * bmp.PixelHeight);
-
-                x = Math.Max(0, x); y = Math.Max(0, y);
-                w = Math.Min(w, bmp.PixelWidth  - x);
-                h = Math.Min(h, bmp.PixelHeight - y);
-                if (w <= 0 || h <= 0) return bmp;
-
-                var cropped = new CroppedBitmap(bmp, new System.Windows.Int32Rect(x, y, w, h));
-                cropped.Freeze();
-                return cropped;
-            }
-            catch { return null; }
+            if (Interlocked.CompareExchange(ref _thumbnailLoaded, 1, 0) == 0)
+                _ = LoadThumbnailAsync();
+            return _thumbnailSource;
         }
+    }
+
+    private async Task LoadThumbnailAsync()
+    {
+        await _loadSemaphore.WaitAsync();
+        try
+        {
+            var source = await Task.Run(LoadThumbnailFromDisk);
+            _thumbnailSource = source;
+            OnPropertyChanged(nameof(ThumbnailSource));
+        }
+        finally
+        {
+            _loadSemaphore.Release();
+        }
+    }
+
+    private BitmapSource? LoadThumbnailFromDisk()
+    {
+        var path = DisplayImagePath;
+        if (!File.Exists(path)) return null;
+
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource        = new Uri(path, UriKind.Absolute);
+            bmp.CacheOption      = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 320; // decode at fixed size even for POI crops (was unbounded)
+            bmp.EndInit();
+            bmp.Freeze();
+
+            if (!Record.PoiNLeft.HasValue) return bmp;
+
+            int x = (int)(Record.PoiNLeft.Value   * bmp.PixelWidth);
+            int y = (int)(Record.PoiNTop!.Value   * bmp.PixelHeight);
+            int w = (int)(Record.PoiNWidth!.Value  * bmp.PixelWidth);
+            int h = (int)(Record.PoiNHeight!.Value * bmp.PixelHeight);
+
+            x = Math.Max(0, x); y = Math.Max(0, y);
+            w = Math.Min(w, bmp.PixelWidth  - x);
+            h = Math.Min(h, bmp.PixelHeight - y);
+            if (w <= 0 || h <= 0) return bmp;
+
+            var cropped = new CroppedBitmap(bmp, new System.Windows.Int32Rect(x, y, w, h));
+            cropped.Freeze();
+            return cropped;
+        }
+        catch { return null; }
     }
 }

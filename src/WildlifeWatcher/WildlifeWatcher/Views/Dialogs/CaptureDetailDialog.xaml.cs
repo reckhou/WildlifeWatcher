@@ -13,6 +13,7 @@ public partial class CaptureDetailDialog : Window
     private readonly ICaptureStorageService _storage;
     private readonly CaptureRecord          _record;
     private bool _showingAnnotated;
+    private string? _initialImagePath; // deferred until Loaded so the dialog opens without freezing
 
     public CaptureDetailDialog(CaptureRecord record, ICaptureStorageService storage)
     {
@@ -58,31 +59,47 @@ public partial class CaptureDetailDialog : Window
             catch { /* ignore malformed JSON */ }
         }
 
-        // Show annotated toggle if annotated file exists
+        // Determine which image to show, but DON'T decode it here — that blocks the UI thread
+        // before ShowDialog returns. Instead, load it async after the window is visible.
         if (!string.IsNullOrEmpty(record.AnnotatedImageFilePath) &&
             File.Exists(record.AnnotatedImageFilePath))
         {
             ToggleAnnotatedButton.Visibility = Visibility.Visible;
             _showingAnnotated = true;
-            LoadImage(record.AnnotatedImageFilePath);
+            _initialImagePath = record.AnnotatedImageFilePath;
             ToggleAnnotatedButton.Content = "View Original";
         }
         else if (File.Exists(record.ImageFilePath))
         {
-            LoadImage(record.ImageFilePath);
+            _initialImagePath = record.ImageFilePath;
         }
+
+        Loaded += async (_, _) =>
+        {
+            if (_initialImagePath != null)
+                await LoadImageAsync(_initialImagePath);
+        };
     }
 
-    private void LoadImage(string path)
+    // Decodes the image on a background thread so the UI thread is never blocked.
+    private async Task LoadImageAsync(string path)
     {
-        var img = new BitmapImage();
-        img.BeginInit();
-        img.UriSource        = new Uri(path, UriKind.Absolute);
-        img.CacheOption      = BitmapCacheOption.OnLoad;
-        img.DecodePixelWidth = 800;
-        img.EndInit();
-        img.Freeze();
-        CaptureImage.Source = img;
+        try
+        {
+            var bmp = await Task.Run(() =>
+            {
+                var img = new BitmapImage();
+                img.BeginInit();
+                img.UriSource        = new Uri(path, UriKind.Absolute);
+                img.CacheOption      = BitmapCacheOption.OnLoad;
+                img.DecodePixelWidth = 800;
+                img.EndInit();
+                img.Freeze();
+                return img;
+            });
+            CaptureImage.Source = bmp;
+        }
+        catch { /* image missing or corrupt — leave placeholder empty */ }
     }
 
     private void FullSize_Click(object sender, RoutedEventArgs e)
@@ -95,19 +112,19 @@ public partial class CaptureDetailDialog : Window
             Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
     }
 
-    private void ToggleAnnotated_Click(object sender, RoutedEventArgs e)
+    private async void ToggleAnnotated_Click(object sender, RoutedEventArgs e)
     {
         _showingAnnotated = !_showingAnnotated;
 
         if (_showingAnnotated && !string.IsNullOrEmpty(_record.AnnotatedImageFilePath) &&
             File.Exists(_record.AnnotatedImageFilePath))
         {
-            LoadImage(_record.AnnotatedImageFilePath);
+            await LoadImageAsync(_record.AnnotatedImageFilePath);
             ToggleAnnotatedButton.Content = "View Original";
         }
         else
         {
-            LoadImage(_record.ImageFilePath);
+            await LoadImageAsync(_record.ImageFilePath);
             ToggleAnnotatedButton.Content = "View Annotated";
         }
     }

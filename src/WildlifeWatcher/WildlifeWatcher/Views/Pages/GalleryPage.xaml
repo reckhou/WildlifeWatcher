@@ -190,13 +190,10 @@
                     </TextBlock.Style>
                 </TextBlock>
 
-                <!-- Species grid (virtualized) -->
+                <!-- Species grid -->
                 <ListBox ItemsSource="{Binding FilteredSpecies}" Margin="16,12"
                          Background="Transparent" BorderThickness="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         VirtualizingPanel.IsVirtualizing="True"
-                         VirtualizingPanel.VirtualizationMode="Recycling"
-                         VirtualizingPanel.ScrollUnit="Pixel"
                          SelectionMode="Single"
                          HorizontalContentAlignment="Stretch">
                     <ListBox.ItemContainerStyle>
@@ -231,8 +228,7 @@
                                 </Border.InputBindings>
                                 <StackPanel>
                                     <Image Height="120" Stretch="UniformToFill"
-                                           Source="{Binding PreviewImagePath,
-                                                    Converter={StaticResource FilePathToImageConverter}}"
+                                           Source="{Binding PreviewImage}"
                                            ClipToBounds="True">
                                         <Image.Style>
                                             <Style TargetType="Image">
@@ -315,13 +311,44 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Capture grid (virtualized) -->
-                <ListBox ItemsSource="{Binding SelectedCaptures}" Margin="16,12"
+                <!-- Loading indicator footer — shows while auto-loading more captures on scroll -->
+                <Border DockPanel.Dock="Bottom" Background="White" Padding="0,8"
+                        BorderBrush="#DDDDDD" BorderThickness="0,1,0,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLoadingMoreCaptures}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasMoreCaptures}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock HorizontalAlignment="Center" FontSize="11" Foreground="#888">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text"
+                                        Value="{Binding RemainingCaptureCount,
+                                                StringFormat={}{0} more capture(s) — scroll down to load}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLoadingMoreCaptures}" Value="True">
+                                        <Setter Property="Text" Value="Loading…"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Border>
+
+                <!-- Capture grid -->
+                <ListBox x:Name="CapturesListBox"
+                         ScrollViewer.ScrollChanged="OnCapturesScrollChanged"
+                         ItemsSource="{Binding SelectedCaptures}" Margin="16,12"
                          Background="Transparent" BorderThickness="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         VirtualizingPanel.IsVirtualizing="True"
-                         VirtualizingPanel.VirtualizationMode="Recycling"
-                         VirtualizingPanel.ScrollUnit="Pixel"
                          SelectionMode="Single"
                          HorizontalContentAlignment="Stretch">
                     <ListBox.ItemContainerStyle>

@@ -207,6 +207,18 @@ public class CaptureStorageService : ICaptureStorageService
             .ToListAsync();
     }
 
+    public async Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId, int skip, int take)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.CaptureRecords
+            .Include(c => c.Species)
+            .Where(r => r.SpeciesId == speciesId)
+            .OrderByDescending(r => r.CapturedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+    }
+
     public async Task DeleteCaptureAsync(int captureId)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();

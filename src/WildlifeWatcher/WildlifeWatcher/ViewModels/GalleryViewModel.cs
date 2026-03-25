@@ -15,6 +15,8 @@ public enum GallerySortMode { NameAZ, LatinNameAZ, LatestCapture, TotalCaptures 
 
 public partial class GalleryViewModel : ViewModelBase
 {
+    private const int CapturePageSize = 60;
+
     private readonly ICaptureStorageService _captureStorage;
     private readonly ISettingsService       _settings;
     private readonly IBirdPhotoService      _birdPhotoService;
@@ -22,11 +24,16 @@ public partial class GalleryViewModel : ViewModelBase
     private List<SpeciesCardViewModel> _allSpecies = new();
     private SpeciesCardViewModel? _selectedSpecies;
     private int _photoFetchInProgress = 0; // 0 = idle, 1 = running (Interlocked flag)
+    private int _currentSpeciesId;
+    private int _capturePageOffset;
 
     [ObservableProperty] private GalleryView     _currentView        = GalleryView.SpeciesList;
     [ObservableProperty] private bool            _isRefreshingPhotos = false;
     [ObservableProperty] private string          _refreshStatusText  = string.Empty;
     [ObservableProperty] private bool            _isSelectionMode;
+    [ObservableProperty] private bool            _hasMoreCaptures;
+    [ObservableProperty] private int             _remainingCaptureCount;
+    [ObservableProperty] private bool            _isLoadingMoreCaptures;
 
     public bool IsNotRefreshingPhotos => !IsRefreshingPhotos;
     public int  SelectedCount         => SelectedCaptures.Count(c => c.IsSelected);
@@ -52,10 +59,10 @@ public partial class GalleryViewModel : ViewModelBase
     public bool IsShowingSpeciesDetail => CurrentView == GalleryView.SpeciesDetail;
     public bool IsShowingCalendarView  => CurrentView == GalleryView.CalendarView;
 
-    public ObservableCollection<SpeciesCardViewModel>  FilteredSpecies     { get; } = new();
-    public ObservableCollection<CaptureCardViewModel>  SelectedCaptures    { get; } = new();
-    public ObservableCollection<CalendarDayViewModel>  CalendarDays        { get; } = new();
-    public ObservableCollection<CaptureCardViewModel>  SelectedDayCaptures { get; } = new();
+    public ObservableCollection<SpeciesCardViewModel>     FilteredSpecies     { get; } = new();
+    public RangeObservableCollection<CaptureCardViewModel> SelectedCaptures  { get; } = new();
+    public ObservableCollection<CalendarDayViewModel>     CalendarDays        { get; } = new();
+    public ObservableCollection<CaptureCardViewModel>     SelectedDayCaptures { get; } = new();
 
     public GalleryViewModel(ICaptureStorageService captureStorage, ISettingsService settings, IBirdPhotoService birdPhotoService, ILogger<GalleryViewModel> logger)
     {
@@ -282,11 +289,14 @@ public partial class GalleryViewModel : ViewModelBase
         await LoadAsync();
         if (CurrentView == GalleryView.SpeciesDetail && _selectedSpecies != null)
         {
-            var stillExists = _allSpecies.Any(s => s.Summary.SpeciesId == _selectedSpecies.Summary.SpeciesId);
-            if (!stillExists)
+            var refreshed = _allSpecies.FirstOrDefault(s => s.Summary.SpeciesId == _selectedSpecies.Summary.SpeciesId);
+            if (refreshed == null)
                 CurrentView = GalleryView.SpeciesList;
             else
+            {
+                _selectedSpecies = refreshed;
                 await LoadCapturesAsync(_selectedSpecies.Summary.SpeciesId);
+            }
         }
     }
 
@@ -348,24 +358,65 @@ public partial class GalleryViewModel : ViewModelBase
         var dialog = new CaptureDetailDialog(card.Record, _captureStorage);
         dialog.ShowDialog();
 
+        // Only reload when a real mutation occurred (delete or reassign set DialogResult = true).
+        // Plain close and save-notes leave DialogResult null — no gallery reload needed.
+        if (dialog.DialogResult != true) return;
+
         await LoadAsync();
 
         if (CurrentView == GalleryView.SpeciesDetail && _selectedSpecies != null)
         {
-            var stillExists = _allSpecies.Any(s => s.Summary.SpeciesId == _selectedSpecies.Summary.SpeciesId);
-            if (!stillExists)
+            var refreshed = _allSpecies.FirstOrDefault(s => s.Summary.SpeciesId == _selectedSpecies.Summary.SpeciesId);
+            if (refreshed == null)
                 CurrentView = GalleryView.SpeciesList;
             else
+            {
+                _selectedSpecies = refreshed;
                 await LoadCapturesAsync(_selectedSpecies.Summary.SpeciesId);
+            }
         }
     }
 
     private async Task LoadCapturesAsync(int speciesId)
     {
-        var captures = await _captureStorage.GetCapturesBySpeciesAsync(speciesId);
-        SelectedCaptures.Clear();
-        foreach (var c in captures)
-            SelectedCaptures.Add(new CaptureCardViewModel(c));
+        _currentSpeciesId  = speciesId;
+        _capturePageOffset = 0;
+
+        var captures = await _captureStorage.GetCapturesBySpeciesAsync(speciesId, 0, CapturePageSize);
+        // Build VMs on background thread to keep File.Exists calls off the UI thread
+        var cards = await Task.Run(() => captures.Select(c => new CaptureCardViewModel(c)).ToList());
+        SelectedCaptures.ResetWith(cards); // single Reset notification → one layout pass
+
+        _capturePageOffset = captures.Count;
+        UpdateMoreCapturesState();
+    }
+
+    private void UpdateMoreCapturesState()
+    {
+        var total = _allSpecies.FirstOrDefault(s => s.Summary.SpeciesId == _currentSpeciesId)?.CaptureCount ?? 0;
+        RemainingCaptureCount = total - _capturePageOffset;
+        HasMoreCaptures       = RemainingCaptureCount > 0;
+    }
+
+    [RelayCommand]
+    private async Task LoadMoreCapturesAsync()
+    {
+        if (!HasMoreCaptures) return;
+        IsLoadingMoreCaptures = true;
+        try
+        {
+            var captures = await _captureStorage.GetCapturesBySpeciesAsync(
+                _currentSpeciesId, _capturePageOffset, CapturePageSize);
+            // Build VMs on background thread to keep File.Exists calls off the UI thread
+            var cards = await Task.Run(() => captures.Select(c => new CaptureCardViewModel(c)).ToList());
+            SelectedCaptures.AddRange(cards); // single Add notification → one layout pass
+            _capturePageOffset += captures.Count;
+            UpdateMoreCapturesState();
+        }
+        finally
+        {
+            IsLoadingMoreCaptures = false;
+        }
     }
 
     // ── Calendar commands ─────────────────────────────────────────────────
