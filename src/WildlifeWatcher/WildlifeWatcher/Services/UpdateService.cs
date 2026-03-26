@@ -181,15 +181,19 @@ public class UpdateService : IUpdateService
         var appDir       = Path.GetDirectoryName(currentExe) ?? AppContext.BaseDirectory;
 
         // Write PS1 updater script — copies all files from extracted directory
+        // Use cmd /c start to launch the restarted app via the shell's built-in start
+        // command rather than PowerShell's Start-Process. Even with UseShellExecute=true,
+        // a hidden PowerShell process passes a hidden window-station context to its
+        // children via STARTUPINFO inheritance, which prevents LibVLCSharp's ForegroundWindow
+        // from embedding correctly. cmd /c start "" breaks that inheritance chain and gives
+        // the new process a clean interactive-shell context (identical to a user double-click).
         var script = $"""
             Start-Sleep -Seconds 3
             Copy-Item -Path "{extractedDir}\*" -Destination "{appDir}" -Recurse -Force
-            Start-Process "{currentExe}" -WindowStyle Normal
+            cmd /c start "" "{currentExe}"
             """;
         await File.WriteAllTextAsync(scriptPath, script, ct);
 
-        // UseShellExecute = true so PowerShell runs with full shell context and can
-        // spawn the new process with a proper window station (fixes VLC embedding after restart).
         Process.Start(new ProcessStartInfo
         {
             FileName        = "powershell.exe",
