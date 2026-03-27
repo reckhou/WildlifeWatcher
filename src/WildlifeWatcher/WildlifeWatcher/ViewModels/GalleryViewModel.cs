@@ -42,6 +42,16 @@ public partial class GalleryViewModel : ViewModelBase
     [ObservableProperty] private string          _selectedSpeciesScientificName = string.Empty;
     [ObservableProperty] private GallerySortMode _sortMode    = GallerySortMode.LatestCapture;
 
+    // Day filter state
+    [ObservableProperty] private bool _isFilteredByDay;
+    [ObservableProperty] private int  _filterYear;
+    [ObservableProperty] private int  _filterMonth = 1;
+    [ObservableProperty] private int  _filterDay   = 1;
+
+    public ObservableCollection<int>  AvailableFilterYears { get; } = new();
+    public IReadOnlyList<int> AvailableMonths { get; } = Enumerable.Range(1, 12).ToList();
+    public IReadOnlyList<int> AvailableDays   { get; } = Enumerable.Range(1, 31).ToList();
+
     // Calendar state
     [ObservableProperty] private int       _calendarYear  = DateTime.Today.Year;
     [ObservableProperty] private int       _calendarMonth = DateTime.Today.Month;
@@ -341,6 +351,7 @@ public partial class GalleryViewModel : ViewModelBase
     private void Back()
     {
         IsSelectionMode  = false;
+        IsFilteredByDay  = false;
         CurrentView      = GalleryView.SpeciesList;
         _selectedSpecies = null;
     }
@@ -381,6 +392,15 @@ public partial class GalleryViewModel : ViewModelBase
     {
         _currentSpeciesId  = speciesId;
         _capturePageOffset = 0;
+        IsFilteredByDay    = false;
+
+        // Populate year dropdown from actual captures for this species
+        var years = await _captureStorage.GetCaptureYearsForSpeciesAsync(speciesId);
+        AvailableFilterYears.Clear();
+        foreach (var y in years) AvailableFilterYears.Add(y);
+        FilterYear  = years.Count > 0 ? years[0] : DateTime.Today.Year;
+        FilterMonth = DateTime.Today.Month;
+        FilterDay   = DateTime.Today.Day;
 
         var captures = await _captureStorage.GetCapturesBySpeciesAsync(speciesId, 0, CapturePageSize);
         // Build VMs on background thread to keep File.Exists calls off the UI thread
@@ -417,6 +437,32 @@ public partial class GalleryViewModel : ViewModelBase
         {
             IsLoadingMoreCaptures = false;
         }
+    }
+
+    // ── Day filter commands ───────────────────────────────────────────────
+
+    [RelayCommand]
+    private async Task FilterByDayAsync()
+    {
+        if (FilterYear == 0 || FilterMonth == 0 || FilterDay == 0) return;
+        DateTime date;
+        try { date = new DateTime(FilterYear, FilterMonth, FilterDay); }
+        catch (ArgumentOutOfRangeException) { return; } // invalid combo (e.g. Feb 31)
+
+        // Set flag BEFORE ResetWith so code-behind sees it when CollectionChanged fires
+        IsFilteredByDay = true;
+        var captures = await _captureStorage.GetCapturesBySpeciesAndDateAsync(_currentSpeciesId, date);
+        var cards = await Task.Run(() => captures.Select(c => new CaptureCardViewModel(c)).ToList());
+        SelectedCaptures.ResetWith(cards);
+        HasMoreCaptures = false;
+    }
+
+    [RelayCommand]
+    private async Task ShowAllCapturesAsync()
+    {
+        // Set flag BEFORE ResetWith so code-behind can restore pre-filter scroll offset
+        IsFilteredByDay = false;
+        await LoadCapturesAsync(_currentSpeciesId);
     }
 
     // ── Calendar commands ─────────────────────────────────────────────────

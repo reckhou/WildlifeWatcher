@@ -12,6 +12,8 @@ public partial class GalleryPage : UserControl
 
     // Per-species scroll memory: species name → vertical offset
     private readonly Dictionary<string, double> _scrollPositions = new();
+    // Scroll offsets saved just before a day filter is applied, keyed by species name.
+    private readonly Dictionary<string, double> _preFilterScrollPositions = new();
     private ScrollViewer? _capturesScrollViewer;
     // True while a species transition is in progress so spurious ScrollChanged events
     // fired during the reset/layout don't overwrite the new species' saved position.
@@ -34,11 +36,30 @@ public partial class GalleryPage : UserControl
 
         // Also restore when CurrentView changes TO SpeciesDetail (Back → re-open path),
         // because the ListBox is Collapsed during LoadCapturesAsync and ignores scroll calls.
+        // Also tracks IsFilteredByDay changes to save/restore pre-filter scroll position.
         viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(GalleryViewModel.IsShowingSpeciesDetail) &&
                 viewModel.IsShowingSpeciesDetail)
                 ScheduleScrollRestore();
+
+            if (e.PropertyName == nameof(GalleryViewModel.IsFilteredByDay))
+            {
+                var name = _vm.SelectedSpeciesName;
+                if (string.IsNullOrEmpty(name)) return;
+                if (_vm.IsFilteredByDay)
+                {
+                    // Snapshot the current scroll offset before the filtered list loads
+                    _preFilterScrollPositions[name] = _scrollPositions.GetValueOrDefault(name, 0.0);
+                }
+                else
+                {
+                    // Restore pre-filter offset into _scrollPositions so ScheduleScrollRestore
+                    // picks it up naturally without any changes to that path.
+                    if (_preFilterScrollPositions.TryGetValue(name, out var offset))
+                        _scrollPositions[name] = offset;
+                }
+            }
         };
     }
 
@@ -47,7 +68,10 @@ public partial class GalleryPage : UserControl
         _suppressScrollSave = true;
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
-            RestoreSpeciesScroll();
+            if (_vm.IsFilteredByDay)
+                GetCapturesScrollViewer()?.ScrollToVerticalOffset(0);
+            else
+                RestoreSpeciesScroll();
             _suppressScrollSave = false;
         });
     }

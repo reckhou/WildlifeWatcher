@@ -311,6 +311,35 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Day filter bar -->
+                <Border DockPanel.Dock="Top" Background="#F5F5F5" Padding="16,8"
+                        BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Filter by day:" FontSize="12" Foreground="#555"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox ItemsSource="{Binding AvailableFilterYears}"
+                                  SelectedItem="{Binding FilterYear, Mode=TwoWay}"
+                                  Width="70" FontSize="12" Margin="0,0,4,0"
+                                  VerticalContentAlignment="Center"/>
+                        <ComboBox ItemsSource="{Binding AvailableMonths}"
+                                  SelectedItem="{Binding FilterMonth, Mode=TwoWay}"
+                                  Width="46" FontSize="12" Margin="0,0,4,0"
+                                  VerticalContentAlignment="Center"/>
+                        <ComboBox ItemsSource="{Binding AvailableDays}"
+                                  SelectedItem="{Binding FilterDay, Mode=TwoWay}"
+                                  Width="46" FontSize="12" Margin="0,0,12,0"
+                                  VerticalContentAlignment="Center"/>
+                        <Button Content="Filter" Command="{Binding FilterByDayCommand}"
+                                Background="#2D5A27" Foreground="White" BorderThickness="0"
+                                Padding="10,4" FontSize="12" Cursor="Hand" Margin="0,0,8,0"/>
+                        <Button Content="Show All" Command="{Binding ShowAllCapturesCommand}"
+                                Background="#555555" Foreground="White" BorderThickness="0"
+                                Padding="10,4" FontSize="12" Cursor="Hand"
+                                Visibility="{Binding IsFilteredByDay,
+                                             Converter={StaticResource BoolToVisibleConverter}}"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- Loading indicator footer — shows while auto-loading more captures on scroll -->
                 <Border DockPanel.Dock="Bottom" Background="White" Padding="0,8"
                         BorderBrush="#DDDDDD" BorderThickness="0,1,0,0">

@@ -32,6 +32,10 @@ public interface ICaptureStorageService
     // Calendar queries (Phase 6)
     Task<Dictionary<DateTime, DailySummary>> GetCaptureDailySummaryForMonthAsync(int year, int month);
     Task<IReadOnlyList<CaptureRecord>> GetCapturesByDateAsync(DateTime date);
+
+    // Day filter queries
+    Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAndDateAsync(int speciesId, DateTime date);
+    Task<IReadOnlyList<int>> GetCaptureYearsForSpeciesAsync(int speciesId);
 }
 
 public record DailySummary(int Count, string? WeatherCondition);
