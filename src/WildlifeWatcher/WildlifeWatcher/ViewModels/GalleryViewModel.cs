@@ -62,6 +62,7 @@ public partial class GalleryViewModel : ViewModelBase
     // Calendar state
     [ObservableProperty] private int _calendarYear  = DateTime.Today.Year;
     [ObservableProperty] private int _calendarMonth = DateTime.Today.Month;
+    private GalleryView _preCalendarView = GalleryView.SpeciesList; // restored when leaving calendar
 
     public string CalendarMonthLabel =>
         new DateTime(CalendarYear, CalendarMonth, 1).ToString("MMMM yyyy");
@@ -650,12 +651,14 @@ public partial class GalleryViewModel : ViewModelBase
     [RelayCommand]
     private void ShowSpeciesList()
     {
-        CurrentView = GalleryView.SpeciesList;
+        // Restore whichever view was active before calendar — could be SpeciesList or SpeciesDetail
+        CurrentView = _preCalendarView;
     }
 
     [RelayCommand]
     private async Task ShowCalendar()
     {
+        _preCalendarView = CurrentView; // remember so ShowSpeciesList can return here
         CurrentView = GalleryView.CalendarView;
         await LoadCalendarAsync();
     }
