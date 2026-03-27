@@ -448,18 +448,6 @@ public partial class GalleryViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task ResetGalleryAsync()
-    {
-        if (MessageBox.Show("Delete all captures permanently? This cannot be undone.",
-                "Confirm Reset", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-            return;
-
-        await _captureStorage.ResetGalleryAsync(_settings.CurrentSettings.CapturesDirectory);
-        await LoadAsync();
-        CurrentView = GalleryView.SpeciesList;
-    }
-
-    [RelayCommand]
     private void ToggleSelectionMode() => IsSelectionMode = !IsSelectionMode;
 
     [RelayCommand]

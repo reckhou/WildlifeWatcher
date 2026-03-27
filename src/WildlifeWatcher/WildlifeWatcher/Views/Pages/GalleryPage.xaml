@@ -158,12 +158,6 @@
                                        FontSize="11" Foreground="#555"
                                        VerticalAlignment="Center" Margin="0,0,8,0"
                                        Visibility="{Binding RefreshStatusText, Converter={StaticResource NullOrEmptyToCollapsedConverter}}"/>
-                            <Button Content="🗑 Reset Gallery"
-                                    Command="{Binding ResetGalleryCommand}"
-                                    Background="#C0392B" Foreground="White"
-                                    BorderThickness="0" Padding="10,5"
-                                    Cursor="Hand" FontSize="12"
-                                    ToolTip="Delete all captures and start fresh"/>
                         </StackPanel>
                         <TextBox Grid.Column="2"
                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"

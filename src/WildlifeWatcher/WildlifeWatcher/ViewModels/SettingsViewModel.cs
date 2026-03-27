@@ -19,12 +19,13 @@ namespace WildlifeWatcher.ViewModels;
 
 public partial class SettingsViewModel : ViewModelBase
 {
-    private readonly ISettingsService    _settingsService;
-    private readonly ICredentialService  _credentialService;
-    private readonly ICameraService      _camera;
-    private readonly IGeocodingService   _geocoding;
-    private readonly IUpdateService      _updateService;
-    private readonly IDataPortService    _dataPortService;
+    private readonly ISettingsService        _settingsService;
+    private readonly ICredentialService      _credentialService;
+    private readonly ICameraService          _camera;
+    private readonly IGeocodingService       _geocoding;
+    private readonly IUpdateService          _updateService;
+    private readonly IDataPortService        _dataPortService;
+    private readonly ICaptureStorageService  _captureStorage;
     private readonly IDbContextFactory<WildlifeDbContext> _dbFactory;
     private readonly ILogger<SettingsViewModel> _logger;
 
@@ -162,12 +163,13 @@ public partial class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowDaylightLocationWarning));
 
     public SettingsViewModel(
-        ISettingsService   settingsService,
-        ICredentialService credentialService,
-        ICameraService     camera,
-        IGeocodingService  geocoding,
-        IUpdateService     updateService,
-        IDataPortService   dataPortService,
+        ISettingsService         settingsService,
+        ICredentialService       credentialService,
+        ICameraService           camera,
+        IGeocodingService        geocoding,
+        IUpdateService           updateService,
+        IDataPortService         dataPortService,
+        ICaptureStorageService   captureStorage,
         IDbContextFactory<WildlifeDbContext> dbFactory,
         ILogger<SettingsViewModel> logger)
     {
@@ -177,6 +179,7 @@ public partial class SettingsViewModel : ViewModelBase
         _geocoding         = geocoding;
         _updateService     = updateService;
         _dataPortService   = dataPortService;
+        _captureStorage    = captureStorage;
         _dbFactory         = dbFactory;
         _logger            = logger;
 
@@ -670,4 +673,17 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     private bool CanForceUpdate() => !IsUpdateCheckBusy && !IsInstalling;
+
+    // ── Danger Zone ───────────────────────────────────────────────────────
+
+    [RelayCommand]
+    private async Task ResetGalleryAsync()
+    {
+        if (MessageBox.Show(
+                "Delete all captures permanently? This cannot be undone.",
+                "Confirm Reset", MessageBoxButton.YesNo, MessageBoxImage.Warning)
+            != MessageBoxResult.Yes) return;
+
+        await _captureStorage.ResetGalleryAsync(_settingsService.CurrentSettings.CapturesDirectory);
+    }
 }

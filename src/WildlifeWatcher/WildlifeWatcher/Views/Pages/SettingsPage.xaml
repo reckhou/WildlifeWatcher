@@ -291,6 +291,18 @@
                        FontSize="11" Foreground="#555" Margin="0,2,0,6"
                        TextWrapping="Wrap"/>
 
+            <!-- Danger Zone -->
+            <TextBlock Text="Danger Zone" Style="{StaticResource Label}"
+                       FontWeight="SemiBold" Foreground="#C0392B" Margin="0,12,0,2"/>
+            <TextBlock Text="Permanently delete all captured photos and detection records. Settings are preserved."
+                       Style="{StaticResource Hint}"/>
+            <Button Content="🗑 Reset Gallery"
+                    Command="{Binding ResetGalleryCommand}"
+                    Background="#C0392B" Foreground="White"
+                    BorderThickness="0" Padding="12,6"
+                    Cursor="Hand" FontSize="12" Margin="0,4,0,0"
+                    HorizontalAlignment="Left"/>
+
             <!-- ═══ Point of Interest ═══ -->
             <TextBlock Text="Point of Interest" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
