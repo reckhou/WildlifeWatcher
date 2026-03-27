@@ -489,69 +489,6 @@
                                Foreground="#2D5A27" Padding="4,6"/>
                 </UniformGrid>
 
-                <!-- Selected day captures strip (shown when a day is selected) -->
-                <Border DockPanel.Dock="Bottom"
-                        Visibility="{Binding SelectedDate, Converter={StaticResource NullToCollapsedConverter}}"
-                        Background="White" BorderBrush="#DDDDDD" BorderThickness="0,1,0,0"
-                        Padding="12,8">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedDateLabel}"
-                                   FontSize="12" FontWeight="Bold" Foreground="#2D5A27"
-                                   Margin="0,0,0,6"/>
-                        <ListBox ItemsSource="{Binding SelectedDayCaptures}"
-                                 Background="Transparent" BorderThickness="0"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 VirtualizingPanel.IsVirtualizing="True"
-                                 VirtualizingPanel.VirtualizationMode="Recycling"
-                                 VirtualizingPanel.ScrollUnit="Pixel"
-                                 SelectionMode="Single">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <VirtualizingStackPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="0"/>
-                                    <Setter Property="Margin" Value="0"/>
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ListBoxItem">
-                                                <ContentPresenter/>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </ListBox.ItemContainerStyle>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Width="100" Margin="4,0" Background="White"
-                                            CornerRadius="4" Cursor="Hand"
-                                            BorderBrush="#E0E0E0" BorderThickness="1">
-                                        <Border.InputBindings>
-                                            <MouseBinding MouseAction="LeftClick"
-                                                          Command="{Binding DataContext.OpenDayCaptureCommand,
-                                                                    RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                          CommandParameter="{Binding}"/>
-                                        </Border.InputBindings>
-                                        <StackPanel>
-                                            <Image Height="70" Stretch="UniformToFill"
-                                                   Source="{Binding DisplayImagePath,
-                                                            Converter={StaticResource FilePathToImageConverter}}"
-                                                   ClipToBounds="True"/>
-                                            <TextBlock Text="{Binding TimeLabel}"
-                                                       FontSize="9" Foreground="#444"
-                                                       Margin="4,2" TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </DockPanel>
-                </Border>
-
                 <!-- Calendar grid -->
                 <ItemsControl ItemsSource="{Binding CalendarDays}" Margin="0">
                     <ItemsControl.ItemsPanel>
@@ -561,8 +498,8 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{Binding HeatColor}" MinHeight="56" Margin="1"
-                                    BorderBrush="#CCCCCC" BorderThickness="1"
+                            <Border Background="White" MinHeight="60" Margin="1"
+                                    BorderBrush="#DDDDDD" BorderThickness="1"
                                     Cursor="Hand">
                                 <Border.InputBindings>
                                     <MouseBinding MouseAction="LeftClick"
@@ -585,22 +522,45 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <StackPanel Margin="4,4">
-                                        <TextBlock Text="{Binding DayNumber,
-                                                          Converter={StaticResource ZeroToEmptyStringConverter}}"
-                                                   FontSize="12" FontWeight="SemiBold"
-                                                   Foreground="#333"/>
-                                        <TextBlock Text="{Binding CaptureCount,
-                                                          Converter={StaticResource ZeroToEmptyStringConverter}}"
-                                                   FontSize="10" Foreground="#2D5A27"
-                                                   Visibility="{Binding CaptureCount,
-                                                                Converter={StaticResource ZeroToCollapsedConverter}}"/>
-                                        <TextBlock Text="{Binding WeatherCondition}"
-                                                   FontSize="9" Foreground="#666"
-                                                   TextWrapping="Wrap"
-                                                   Visibility="{Binding HasWeather,
-                                                                Converter={StaticResource BoolToVisibleConverter}}"/>
-                                    </StackPanel>
+                                    <DockPanel>
+                                        <!-- Subtle accent bar at bottom — opacity encodes capture density -->
+                                        <Rectangle DockPanel.Dock="Bottom" Height="3"
+                                                   Fill="#2D5A27" Opacity="{Binding HeatOpacity}"/>
+                                        <StackPanel Margin="4,3,4,3">
+                                            <TextBlock Text="{Binding DayNumber,
+                                                              Converter={StaticResource ZeroToEmptyStringConverter}}"
+                                                       FontSize="12" FontWeight="SemiBold" Foreground="#222"/>
+                                            <!-- Weather condition -->
+                                            <TextBlock Text="{Binding WeatherLabel}"
+                                                       FontSize="9" Foreground="#444" TextWrapping="Wrap"
+                                                       Visibility="{Binding HasWeather,
+                                                                    Converter={StaticResource BoolToVisibleConverter}}"/>
+                                            <!-- Temperature -->
+                                            <TextBlock Text="{Binding TemperatureLabel}"
+                                                       FontSize="9" Foreground="#333"
+                                                       Visibility="{Binding HasTemperature,
+                                                                    Converter={StaticResource BoolToVisibleConverter}}"/>
+                                            <!-- Precipitation -->
+                                            <TextBlock Text="{Binding PrecipLabel}"
+                                                       FontSize="9" Foreground="#333"
+                                                       Visibility="{Binding HasPrecip,
+                                                                    Converter={StaticResource BoolToVisibleConverter}}"/>
+                                            <!-- Sunrise / Sunset on one line -->
+                                            <StackPanel Orientation="Horizontal"
+                                                        Visibility="{Binding HasSunTimes,
+                                                                     Converter={StaticResource BoolToVisibleConverter}}">
+                                                <TextBlock Text="{Binding SunriseLabel}"
+                                                           FontSize="9" Foreground="#333" Margin="0,0,4,0"/>
+                                                <TextBlock Text="{Binding SunsetLabel}"
+                                                           FontSize="9" Foreground="#333"/>
+                                            </StackPanel>
+                                            <!-- Shot count — shown last -->
+                                            <TextBlock Text="{Binding ShotCountLabel}"
+                                                       FontSize="9" FontWeight="SemiBold" Foreground="#2D5A27"
+                                                       Visibility="{Binding HasShots,
+                                                                    Converter={StaticResource BoolToVisibleConverter}}"/>
+                                        </StackPanel>
+                                    </DockPanel>
                                 </Border>
                             </Border>
                         </DataTemplate>
