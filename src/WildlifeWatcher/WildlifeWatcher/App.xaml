@@ -12,6 +12,7 @@
         <!-- Calendar converters (Phase 6) -->
         <converters:ZeroToCollapsedConverter x:Key="ZeroToCollapsedConverter"/>
         <converters:ZeroToEmptyStringConverter x:Key="ZeroToEmptyStringConverter"/>
+        <converters:HeightThresholdToVisibilityConverter x:Key="HeightThresholdConverter"/>
 
         <!-- Inverse: true → Visible (for IsAnalyzing indicator) -->
         <BooleanToVisibilityConverter x:Key="BoolToVisibleConverter"/>

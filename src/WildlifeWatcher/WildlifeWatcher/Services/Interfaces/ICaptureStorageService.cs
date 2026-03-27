@@ -38,6 +38,8 @@ public interface ICaptureStorageService
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAndDateAsync(int speciesId, DateTime date);
     /// <summary>Returns the distinct date-only values (no time component) for all captures of the given species.</summary>
     Task<IReadOnlyList<DateTime>> GetCaptureDatesForSpeciesAsync(int speciesId);
+    /// <summary>Returns all distinct capture dates across every species.</summary>
+    Task<IReadOnlyList<DateTime>> GetAllCaptureDatesAsync();
     Task<IReadOnlyList<SpeciesSummary>> GetSpeciesSummariesForDateAsync(DateTime date);
 }
 

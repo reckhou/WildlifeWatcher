@@ -393,6 +393,16 @@ public class CaptureStorageService : ICaptureStorageService
             .ToListAsync();
     }
 
+    public async Task<IReadOnlyList<DateTime>> GetAllCaptureDatesAsync()
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.CaptureRecords
+            .Select(c => c.CapturedAt.Date)
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToListAsync();
+    }
+
     public async Task<IReadOnlyList<DateTime>> GetCaptureDatesForSpeciesAsync(int speciesId)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
