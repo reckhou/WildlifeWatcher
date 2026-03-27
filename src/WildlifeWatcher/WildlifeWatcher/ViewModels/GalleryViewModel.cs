@@ -45,12 +45,15 @@ public partial class GalleryViewModel : ViewModelBase
     // Day filter state
     [ObservableProperty] private bool _isFilteredByDay;
     [ObservableProperty] private int  _filterYear;
-    [ObservableProperty] private int  _filterMonth = 1;
-    [ObservableProperty] private int  _filterDay   = 1;
+    [ObservableProperty] private int  _filterMonth;
+    [ObservableProperty] private int  _filterDay;
 
-    public ObservableCollection<int>  AvailableFilterYears { get; } = new();
-    public IReadOnlyList<int> AvailableMonths { get; } = Enumerable.Range(1, 12).ToList();
-    public IReadOnlyList<int> AvailableDays   { get; } = Enumerable.Range(1, 31).ToList();
+    // All distinct capture dates for the current species — used to derive the three dropdown lists.
+    private HashSet<DateTime> _availableDates = new();
+
+    public ObservableCollection<int> AvailableFilterYears  { get; } = new();
+    public ObservableCollection<int> AvailableFilterMonths { get; } = new();
+    public ObservableCollection<int> AvailableFilterDays   { get; } = new();
 
     // Calendar state
     [ObservableProperty] private int       _calendarYear  = DateTime.Today.Year;
@@ -101,6 +104,46 @@ public partial class GalleryViewModel : ViewModelBase
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
     partial void OnSortModeChanged(GallerySortMode value) => ApplyFilter();
+
+    partial void OnFilterYearChanged(int value)
+    {
+        RefreshAvailableMonths();
+    }
+
+    partial void OnFilterMonthChanged(int value)
+    {
+        RefreshAvailableDays();
+    }
+
+    private void RefreshAvailableMonths()
+    {
+        var months = _availableDates
+            .Where(d => d.Year == FilterYear)
+            .Select(d => d.Month)
+            .Distinct()
+            .OrderBy(m => m)
+            .ToList();
+
+        AvailableFilterMonths.Clear();
+        foreach (var m in months) AvailableFilterMonths.Add(m);
+
+        FilterMonth = months.Contains(FilterMonth) ? FilterMonth : (months.Count > 0 ? months[0] : 0);
+    }
+
+    private void RefreshAvailableDays()
+    {
+        var days = _availableDates
+            .Where(d => d.Year == FilterYear && d.Month == FilterMonth)
+            .Select(d => d.Day)
+            .Distinct()
+            .OrderBy(d => d)
+            .ToList();
+
+        AvailableFilterDays.Clear();
+        foreach (var d in days) AvailableFilterDays.Add(d);
+
+        FilterDay = days.Contains(FilterDay) ? FilterDay : (days.Count > 0 ? days[0] : 0);
+    }
 
     private async void OnCaptureSaved(object? sender, CaptureRecord record)
     {
@@ -394,13 +437,17 @@ public partial class GalleryViewModel : ViewModelBase
         _capturePageOffset = 0;
         IsFilteredByDay    = false;
 
-        // Populate year dropdown from actual captures for this species
-        var years = await _captureStorage.GetCaptureYearsForSpeciesAsync(speciesId);
+        // Load all distinct capture dates, then derive year/month/day dropdown lists.
+        var dates = await _captureStorage.GetCaptureDatesForSpeciesAsync(speciesId);
+        _availableDates = new HashSet<DateTime>(dates);
+
+        var years = dates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
         AvailableFilterYears.Clear();
         foreach (var y in years) AvailableFilterYears.Add(y);
-        FilterYear  = years.Count > 0 ? years[0] : DateTime.Today.Year;
-        FilterMonth = DateTime.Today.Month;
-        FilterDay   = DateTime.Today.Day;
+
+        // Setting FilterYear triggers OnFilterYearChanged → RefreshAvailableMonths →
+        // OnFilterMonthChanged → RefreshAvailableDays automatically.
+        FilterYear = years.Count > 0 ? years[0] : DateTime.Today.Year;
 
         var captures = await _captureStorage.GetCapturesBySpeciesAsync(speciesId, 0, CapturePageSize);
         // Build VMs on background thread to keep File.Exists calls off the UI thread
@@ -447,7 +494,9 @@ public partial class GalleryViewModel : ViewModelBase
         if (FilterYear == 0 || FilterMonth == 0 || FilterDay == 0) return;
         DateTime date;
         try { date = new DateTime(FilterYear, FilterMonth, FilterDay); }
-        catch (ArgumentOutOfRangeException) { return; } // invalid combo (e.g. Feb 31)
+        catch (ArgumentOutOfRangeException) { return; }
+        // Only filter if this date actually has captures (guard against stale selection)
+        if (!_availableDates.Contains(date)) return;
 
         // Set flag BEFORE ResetWith so code-behind sees it when CollectionChanged fires
         IsFilteredByDay = true;

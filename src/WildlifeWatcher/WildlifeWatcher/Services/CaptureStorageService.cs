@@ -380,15 +380,16 @@ public class CaptureStorageService : ICaptureStorageService
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<int>> GetCaptureYearsForSpeciesAsync(int speciesId)
+    public async Task<IReadOnlyList<DateTime>> GetCaptureDatesForSpeciesAsync(int speciesId)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        return await db.CaptureRecords
+        var dates = await db.CaptureRecords
             .Where(c => c.SpeciesId == speciesId)
-            .Select(c => c.CapturedAt.Year)
+            .Select(c => c.CapturedAt.Date)
             .Distinct()
-            .OrderByDescending(y => y)
+            .OrderByDescending(d => d)
             .ToListAsync();
+        return dates;
     }
 
     private static Task<byte[]> DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)

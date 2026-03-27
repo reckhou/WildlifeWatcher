@@ -35,7 +35,8 @@ public interface ICaptureStorageService
 
     // Day filter queries
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAndDateAsync(int speciesId, DateTime date);
-    Task<IReadOnlyList<int>> GetCaptureYearsForSpeciesAsync(int speciesId);
+    /// <summary>Returns the distinct date-only values (no time component) for all captures of the given species.</summary>
+    Task<IReadOnlyList<DateTime>> GetCaptureDatesForSpeciesAsync(int speciesId);
 }
 
 public record DailySummary(int Count, string? WeatherCondition);

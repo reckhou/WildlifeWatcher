@@ -321,11 +321,11 @@
                                   SelectedItem="{Binding FilterYear, Mode=TwoWay}"
                                   Width="70" FontSize="12" Margin="0,0,4,0"
                                   VerticalContentAlignment="Center"/>
-                        <ComboBox ItemsSource="{Binding AvailableMonths}"
+                        <ComboBox ItemsSource="{Binding AvailableFilterMonths}"
                                   SelectedItem="{Binding FilterMonth, Mode=TwoWay}"
                                   Width="46" FontSize="12" Margin="0,0,4,0"
                                   VerticalContentAlignment="Center"/>
-                        <ComboBox ItemsSource="{Binding AvailableDays}"
+                        <ComboBox ItemsSource="{Binding AvailableFilterDays}"
                                   SelectedItem="{Binding FilterDay, Mode=TwoWay}"
                                   Width="46" FontSize="12" Margin="0,0,12,0"
                                   VerticalContentAlignment="Center"/>
