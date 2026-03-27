@@ -145,6 +145,35 @@ public partial class GalleryViewModel : ViewModelBase
         RefreshAvailableDays();
     }
 
+    // Sets the filter to an exact date, bypassing the cascade entirely.
+    // Writes backing fields directly, rebuilds all three dropdown lists from _availableDates,
+    // and fires PropertyChanged once for each property.
+    private void SetFilterDate(DateTime date)
+    {
+        // Write backing fields directly to bypass OnFilter*Changed cascade — intentional.
+#pragma warning disable MVVMTK0034
+        _filterYear  = date.Year;
+        _filterMonth = date.Month;
+        _filterDay   = date.Day;
+#pragma warning restore MVVMTK0034
+
+        var years = _availableDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
+        AvailableFilterYears.Clear();
+        foreach (var y in years) AvailableFilterYears.Add(y);
+
+        var months = _availableDates.Where(d => d.Year == date.Year).Select(d => d.Month).Distinct().OrderBy(m => m).ToList();
+        AvailableFilterMonths.Clear();
+        foreach (var m in months) AvailableFilterMonths.Add(m);
+
+        var days = _availableDates.Where(d => d.Year == date.Year && d.Month == date.Month).Select(d => d.Day).Distinct().OrderBy(d => d).ToList();
+        AvailableFilterDays.Clear();
+        foreach (var d in days) AvailableFilterDays.Add(d);
+
+        OnPropertyChanged(nameof(FilterYear));
+        OnPropertyChanged(nameof(FilterMonth));
+        OnPropertyChanged(nameof(FilterDay));
+    }
+
     // Rebuilds all three dropdown lists from _availableDates, preserving selected values when valid.
     // Always raises PropertyChanged for every filter property — even when the value is unchanged —
     // because ObservableCollection.Clear() resets the ComboBox selection and the generated setter
@@ -654,12 +683,10 @@ public partial class GalleryViewModel : ViewModelBase
     {
         if (day is null || day.IsBlank || day.CaptureCount == 0) return;
         var date = day.Date!.Value;
-        // Switch to all-dates context so all three dropdowns reflect the full date set
+        // Switch to all-dates context and set the exact date — bypass cascade to avoid
+        // stale per-species dropdown data from a previously viewed species.
         _availableDates = _allCaptureDates;
-        // Set year first (triggers cascade), then override month/day with the exact clicked values
-        FilterYear  = date.Year;
-        FilterMonth = date.Month;  // overrides cascade result; triggers RefreshAvailableDays
-        FilterDay   = date.Day;    // valid: RefreshAvailableDays already ran for this year/month
+        SetFilterDate(date);
         await FilterByDayAsync();
         CurrentView = GalleryView.SpeciesList;
     }
