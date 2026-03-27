@@ -40,7 +40,8 @@ public partial class GalleryViewModel : ViewModelBase
     [ObservableProperty] private string          _searchText  = string.Empty;
     [ObservableProperty] private string          _selectedSpeciesName           = string.Empty;
     [ObservableProperty] private string          _selectedSpeciesScientificName = string.Empty;
-    [ObservableProperty] private GallerySortMode _sortMode    = GallerySortMode.LatestCapture;
+    [ObservableProperty] private GallerySortMode _sortMode       = GallerySortMode.LatestCapture;
+    [ObservableProperty] private bool            _sortDescending = true; // Latest/Count default to DESC
 
     // Day filter state
     [ObservableProperty] private bool _isFilteredByDay;
@@ -120,8 +121,31 @@ public partial class GalleryViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsShowingCalendarView));
     }
 
+    // Sort button labels — show arrow only on the active sort
+    public string SortNameLabel   => SortMode == GallerySortMode.NameAZ        ? $"Name {Arrow()}"   : "Name";
+    public string SortLatinLabel  => SortMode == GallerySortMode.LatinNameAZ   ? $"Latin {Arrow()}"  : "Latin";
+    public string SortLatestLabel => SortMode == GallerySortMode.LatestCapture ? $"Latest {Arrow()}" : "Latest";
+    public string SortCountLabel  => SortMode == GallerySortMode.TotalCaptures ? $"Count {Arrow()}"  : "Count";
+    private string Arrow() => SortDescending ? "▼" : "▲";
+
     partial void OnSearchTextChanged(string value) => ApplyFilter();
-    partial void OnSortModeChanged(GallerySortMode value) => ApplyFilter();
+    partial void OnSortModeChanged(GallerySortMode value)
+    {
+        NotifySortLabels();
+        ApplyFilter();
+    }
+    partial void OnSortDescendingChanged(bool value)
+    {
+        NotifySortLabels();
+        ApplyFilter();
+    }
+    private void NotifySortLabels()
+    {
+        OnPropertyChanged(nameof(SortNameLabel));
+        OnPropertyChanged(nameof(SortLatinLabel));
+        OnPropertyChanged(nameof(SortLatestLabel));
+        OnPropertyChanged(nameof(SortCountLabel));
+    }
 
     partial void OnFilterYearChanged(int value)
     {
@@ -253,10 +277,18 @@ public partial class GalleryViewModel : ViewModelBase
 
         var sorted = SortMode switch
         {
-            GallerySortMode.LatinNameAZ   => filtered.OrderBy(s => s.Summary.ScientificName),
-            GallerySortMode.LatestCapture => filtered.OrderByDescending(s => s.LatestCaptureAt),
-            GallerySortMode.TotalCaptures => filtered.OrderByDescending(s => s.CaptureCount),
-            _                             => filtered.OrderBy(s => s.Summary.CommonName),
+            GallerySortMode.LatinNameAZ   => SortDescending
+                                              ? (IEnumerable<SpeciesCardViewModel>)filtered.OrderByDescending(s => s.Summary.ScientificName)
+                                              : filtered.OrderBy(s => s.Summary.ScientificName),
+            GallerySortMode.LatestCapture => SortDescending
+                                              ? filtered.OrderByDescending(s => s.LatestCaptureAt)
+                                              : filtered.OrderBy(s => s.LatestCaptureAt),
+            GallerySortMode.TotalCaptures => SortDescending
+                                              ? filtered.OrderByDescending(s => s.CaptureCount)
+                                              : filtered.OrderBy(s => s.CaptureCount),
+            _                             => SortDescending
+                                              ? filtered.OrderByDescending(s => s.Summary.CommonName)
+                                              : filtered.OrderBy(s => s.Summary.CommonName),
         };
 
         FilteredSpecies.Clear();
@@ -375,13 +407,24 @@ public partial class GalleryViewModel : ViewModelBase
     [RelayCommand]
     private void Sort(string mode)
     {
-        SortMode = mode switch
+        var newMode = mode switch
         {
             "LatinNameAZ"   => GallerySortMode.LatinNameAZ,
             "LatestCapture" => GallerySortMode.LatestCapture,
             "TotalCaptures" => GallerySortMode.TotalCaptures,
             _               => GallerySortMode.NameAZ,
         };
+
+        if (newMode == SortMode)
+        {
+            SortDescending = !SortDescending; // toggle direction on re-click
+        }
+        else
+        {
+            // Name/Latin default ASC; Latest/Count default DESC
+            SortDescending = newMode == GallerySortMode.LatestCapture || newMode == GallerySortMode.TotalCaptures;
+            SortMode = newMode;
+        }
     }
 
     [RelayCommand]
