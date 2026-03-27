@@ -173,6 +173,24 @@
                     </Grid>
                 </Border>
 
+                <!-- Date filter badge — shown when navigated from a calendar day click -->
+                <Border DockPanel.Dock="Top"
+                        Visibility="{Binding IsSpeciesListDateFiltered,
+                                     Converter={StaticResource BoolToVisibleConverter}}"
+                        Background="#E8F5E9" Padding="12,6"
+                        BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SpeciesListDateLabel}"
+                                   FontSize="12" FontWeight="SemiBold" Foreground="#2D5A27"
+                                   VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <Button Content="✕ Show All Species"
+                                Command="{Binding ClearSpeciesDateFilterCommand}"
+                                Background="Transparent" Foreground="#2D5A27"
+                                BorderBrush="#2D5A27" BorderThickness="1"
+                                Padding="8,3" FontSize="11" Cursor="Hand"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- Empty state -->
                 <TextBlock DockPanel.Dock="Top"
                            Text="No captures yet. Connect a camera and start watching!"
