@@ -599,7 +599,7 @@ public partial class GalleryViewModel : ViewModelBase
         {
             var date = new DateTime(CalendarYear, CalendarMonth, day);
             summaries.TryGetValue(date, out var summary);
-            CalendarDays.Add(new CalendarDayViewModel(date, summary?.Count ?? 0, summary?.WeatherCondition));
+            CalendarDays.Add(new CalendarDayViewModel(date, summary?.Count ?? 0, summary));
         }
 
         OnPropertyChanged(nameof(CalendarMonthLabel));
