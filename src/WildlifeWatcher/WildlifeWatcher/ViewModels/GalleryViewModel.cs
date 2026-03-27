@@ -49,7 +49,9 @@ public partial class GalleryViewModel : ViewModelBase
     [ObservableProperty] private int  _filterMonth;
     [ObservableProperty] private int  _filterDay;
 
-    // All distinct capture dates — drives the three filter dropdowns for both views
+    // _availableDates is context-sensitive: all capture dates when in species list,
+    // per-species capture dates when in species detail. Drives the filter dropdowns.
+    private HashSet<DateTime>           _availableDates     = new();
     private HashSet<DateTime>           _allCaptureDates    = new();
     private List<SpeciesCardViewModel>? _filteredSpeciesByDay; // non-null when filter is active
 
@@ -143,9 +145,24 @@ public partial class GalleryViewModel : ViewModelBase
         RefreshAvailableDays();
     }
 
+    // Rebuilds all three dropdown lists from _availableDates, preserving selected
+    // values when they remain valid, and triggering the cascade otherwise.
+    private void RebuildFilterDropdowns()
+    {
+        var years = _availableDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
+        AvailableFilterYears.Clear();
+        foreach (var y in years) AvailableFilterYears.Add(y);
+
+        var newYear = years.Contains(FilterYear) ? FilterYear : (years.Count > 0 ? years[0] : 0);
+        if (newYear != FilterYear)
+            FilterYear = newYear; // triggers OnFilterYearChanged → RefreshAvailableMonths → RefreshAvailableDays
+        else
+            RefreshAvailableMonths(); // year unchanged but date set changed — manually refresh months/days
+    }
+
     private void RefreshAvailableMonths()
     {
-        var months = _allCaptureDates
+        var months = _availableDates
             .Where(d => d.Year == FilterYear)
             .Select(d => d.Month)
             .Distinct()
@@ -160,7 +177,7 @@ public partial class GalleryViewModel : ViewModelBase
 
     private void RefreshAvailableDays()
     {
-        var days = _allCaptureDates
+        var days = _availableDates
             .Where(d => d.Year == FilterYear && d.Month == FilterMonth)
             .Select(d => d.Day)
             .Distinct()
@@ -186,14 +203,11 @@ public partial class GalleryViewModel : ViewModelBase
         _filteredSpeciesByDay = null;
         IsFilteredByDay = false;
 
-        // Load all capture dates to drive the shared day-filter dropdowns
+        // Load all capture dates and switch dropdowns to species-list context (all dates)
         var allDates = await _captureStorage.GetAllCaptureDatesAsync();
         _allCaptureDates = new HashSet<DateTime>(allDates);
-        var years = allDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
-        AvailableFilterYears.Clear();
-        foreach (var y in years) AvailableFilterYears.Add(y);
-        FilterYear = years.Count > 0 ? years[0] : DateTime.Today.Year;
-        // ↑ triggers OnFilterYearChanged → RefreshAvailableMonths → OnFilterMonthChanged → RefreshAvailableDays
+        _availableDates  = _allCaptureDates;
+        RebuildFilterDropdowns();
 
         var summaries = await _captureStorage.GetAllSpeciesSummariesAsync();
         _allSpecies = summaries.Select(s => new SpeciesCardViewModel(s)).ToList();
@@ -449,7 +463,9 @@ public partial class GalleryViewModel : ViewModelBase
         IsSelectionMode  = false;
         CurrentView      = GalleryView.SpeciesList;
         _selectedSpecies = null;
-        // IsFilteredByDay intentionally preserved — species list retains the active date filter
+        // Switch dropdowns back to all-dates context; IsFilteredByDay preserved so species list stays filtered
+        _availableDates = _allCaptureDates;
+        RebuildFilterDropdowns();
     }
 
     [RelayCommand]
@@ -488,8 +504,11 @@ public partial class GalleryViewModel : ViewModelBase
     {
         _currentSpeciesId  = speciesId;
         _capturePageOffset = 0;
-        // Note: IsFilteredByDay and AvailableFilterYears/Months/Days are managed by the shared filter —
-        // do NOT reset them here so the date selection stays consistent across both views.
+
+        // Switch dropdowns to species-detail context: only dates this species has captures on
+        var dates = await _captureStorage.GetCaptureDatesForSpeciesAsync(speciesId);
+        _availableDates = new HashSet<DateTime>(dates);
+        RebuildFilterDropdowns(); // preserves FilterYear/Month/Day when valid for this species
 
         var captures = await _captureStorage.GetCapturesBySpeciesAsync(speciesId, 0, CapturePageSize);
         // Build VMs on background thread to keep File.Exists calls off the UI thread
