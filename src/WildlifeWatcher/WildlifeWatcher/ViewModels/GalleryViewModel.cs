@@ -145,8 +145,10 @@ public partial class GalleryViewModel : ViewModelBase
         RefreshAvailableDays();
     }
 
-    // Rebuilds all three dropdown lists from _availableDates, preserving selected
-    // values when they remain valid, and triggering the cascade otherwise.
+    // Rebuilds all three dropdown lists from _availableDates, preserving selected values when valid.
+    // Always raises PropertyChanged for every filter property — even when the value is unchanged —
+    // because ObservableCollection.Clear() resets the ComboBox selection and the generated setter
+    // won't re-notify when the new value equals the old value.
     private void RebuildFilterDropdowns()
     {
         var years = _availableDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
@@ -155,9 +157,12 @@ public partial class GalleryViewModel : ViewModelBase
 
         var newYear = years.Contains(FilterYear) ? FilterYear : (years.Count > 0 ? years[0] : 0);
         if (newYear != FilterYear)
-            FilterYear = newYear; // triggers OnFilterYearChanged → RefreshAvailableMonths → RefreshAvailableDays
+            FilterYear = newYear; // raises PropertyChanged and triggers cascade
         else
-            RefreshAvailableMonths(); // year unchanged but date set changed — manually refresh months/days
+        {
+            OnPropertyChanged(nameof(FilterYear)); // value unchanged but ComboBox lost selection after Clear()
+            RefreshAvailableMonths();
+        }
     }
 
     private void RefreshAvailableMonths()
@@ -172,9 +177,14 @@ public partial class GalleryViewModel : ViewModelBase
         AvailableFilterMonths.Clear();
         foreach (var m in months) AvailableFilterMonths.Add(m);
 
-        FilterMonth = months.Contains(FilterMonth) ? FilterMonth : (months.Count > 0 ? months[0] : 0);
-        // Always rebuild days — the available-date set may have changed even if FilterMonth is unchanged
-        RefreshAvailableDays();
+        var newMonth = months.Contains(FilterMonth) ? FilterMonth : (months.Count > 0 ? months[0] : 0);
+        if (newMonth != FilterMonth)
+            FilterMonth = newMonth; // raises PropertyChanged and triggers cascade
+        else
+        {
+            OnPropertyChanged(nameof(FilterMonth));
+            RefreshAvailableDays();
+        }
     }
 
     private void RefreshAvailableDays()
@@ -189,7 +199,11 @@ public partial class GalleryViewModel : ViewModelBase
         AvailableFilterDays.Clear();
         foreach (var d in days) AvailableFilterDays.Add(d);
 
-        FilterDay = days.Contains(FilterDay) ? FilterDay : (days.Count > 0 ? days[0] : 0);
+        var newDay = days.Contains(FilterDay) ? FilterDay : (days.Count > 0 ? days[0] : 0);
+        if (newDay != FilterDay)
+            FilterDay = newDay;
+        else
+            OnPropertyChanged(nameof(FilterDay));
     }
 
     private async void OnCaptureSaved(object? sender, CaptureRecord record)
