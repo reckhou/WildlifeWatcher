@@ -521,10 +521,21 @@ public partial class GalleryViewModel : ViewModelBase
         _currentSpeciesId  = speciesId;
         _capturePageOffset = 0;
 
-        // Switch dropdowns to species-detail context: only dates this species has captures on
+        // Switch dropdowns to species-detail context: only dates this species has captures on.
+        // Exception: if an active filter date falls outside this species' dates (e.g. calendar date
+        // with no shots for this species), keep all-dates so the ComboBox doesn't lose the selection.
         var dates = await _captureStorage.GetCaptureDatesForSpeciesAsync(speciesId);
-        _availableDates = new HashSet<DateTime>(dates);
-        RebuildFilterDropdowns(); // preserves FilterYear/Month/Day when valid for this species
+        var perSpeciesDates = new HashSet<DateTime>(dates);
+        DateTime? activeFilter = null;
+        if (IsFilteredByDay && FilterYear > 0 && FilterMonth > 0 && FilterDay > 0)
+        {
+            try { activeFilter = new DateTime(FilterYear, FilterMonth, FilterDay); }
+            catch (ArgumentOutOfRangeException) { /* ignore invalid */ }
+        }
+        _availableDates = (activeFilter.HasValue && !perSpeciesDates.Contains(activeFilter.Value))
+            ? _allCaptureDates   // keep active date selectable even with 0 shots for this species
+            : perSpeciesDates;
+        RebuildFilterDropdowns();
 
         var captures = await _captureStorage.GetCapturesBySpeciesAsync(speciesId, 0, CapturePageSize);
         // Build VMs on background thread to keep File.Exists calls off the UI thread
