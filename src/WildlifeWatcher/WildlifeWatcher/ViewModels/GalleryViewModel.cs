@@ -43,31 +43,19 @@ public partial class GalleryViewModel : ViewModelBase
     [ObservableProperty] private GallerySortMode _sortMode       = GallerySortMode.LatestCapture;
     [ObservableProperty] private bool            _sortDescending = true; // Latest/Count default to DESC
 
-    // Day filter state
+    // Shared day filter — controls both the species list and the shot list
     [ObservableProperty] private bool _isFilteredByDay;
     [ObservableProperty] private int  _filterYear;
     [ObservableProperty] private int  _filterMonth;
     [ObservableProperty] private int  _filterDay;
 
-    // All distinct capture dates for the current species — used to derive the three dropdown lists.
-    private HashSet<DateTime> _availableDates = new();
+    // All distinct capture dates — drives the three filter dropdowns for both views
+    private HashSet<DateTime>           _allCaptureDates    = new();
+    private List<SpeciesCardViewModel>? _filteredSpeciesByDay; // non-null when filter is active
 
     public ObservableCollection<int> AvailableFilterYears  { get; } = new();
     public ObservableCollection<int> AvailableFilterMonths { get; } = new();
     public ObservableCollection<int> AvailableFilterDays   { get; } = new();
-
-    // Species list day filter state (parallel to the species-detail filter, but filters which species show)
-    [ObservableProperty] private bool _isSpeciesListFiltered;
-    [ObservableProperty] private int  _speciesListFilterYear;
-    [ObservableProperty] private int  _speciesListFilterMonth;
-    [ObservableProperty] private int  _speciesListFilterDay;
-
-    private HashSet<DateTime>         _allCaptureDates   = new();
-    private List<SpeciesCardViewModel>? _filteredSpeciesByDay; // non-null when list filter is active
-
-    public ObservableCollection<int> AvailableSpeciesListYears  { get; } = new();
-    public ObservableCollection<int> AvailableSpeciesListMonths { get; } = new();
-    public ObservableCollection<int> AvailableSpeciesListDays   { get; } = new();
 
     // Calendar state
     [ObservableProperty] private int _calendarYear  = DateTime.Today.Year;
@@ -101,31 +89,6 @@ public partial class GalleryViewModel : ViewModelBase
             }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to reload gallery after reset"); }
         };
-    }
-
-    partial void OnSpeciesListFilterYearChanged(int value)  => RefreshSpeciesListMonths();
-    partial void OnSpeciesListFilterMonthChanged(int value) => RefreshSpeciesListDays();
-
-    private void RefreshSpeciesListMonths()
-    {
-        var months = _allCaptureDates
-            .Where(d => d.Year == SpeciesListFilterYear)
-            .Select(d => d.Month).Distinct().OrderBy(m => m).ToList();
-        AvailableSpeciesListMonths.Clear();
-        foreach (var m in months) AvailableSpeciesListMonths.Add(m);
-        SpeciesListFilterMonth = months.Contains(SpeciesListFilterMonth) ? SpeciesListFilterMonth
-                                 : (months.Count > 0 ? months[0] : 0);
-    }
-
-    private void RefreshSpeciesListDays()
-    {
-        var days = _allCaptureDates
-            .Where(d => d.Year == SpeciesListFilterYear && d.Month == SpeciesListFilterMonth)
-            .Select(d => d.Day).Distinct().OrderBy(d => d).ToList();
-        AvailableSpeciesListDays.Clear();
-        foreach (var d in days) AvailableSpeciesListDays.Add(d);
-        SpeciesListFilterDay = days.Contains(SpeciesListFilterDay) ? SpeciesListFilterDay
-                               : (days.Count > 0 ? days[0] : 0);
     }
 
     partial void OnIsRefreshingPhotosChanged(bool value)
@@ -182,7 +145,7 @@ public partial class GalleryViewModel : ViewModelBase
 
     private void RefreshAvailableMonths()
     {
-        var months = _availableDates
+        var months = _allCaptureDates
             .Where(d => d.Year == FilterYear)
             .Select(d => d.Month)
             .Distinct()
@@ -197,7 +160,7 @@ public partial class GalleryViewModel : ViewModelBase
 
     private void RefreshAvailableDays()
     {
-        var days = _availableDates
+        var days = _allCaptureDates
             .Where(d => d.Year == FilterYear && d.Month == FilterMonth)
             .Select(d => d.Day)
             .Distinct()
@@ -219,18 +182,18 @@ public partial class GalleryViewModel : ViewModelBase
 
     public async Task LoadAsync()
     {
-        // Reset species-list filter state
+        // Reset shared filter state
         _filteredSpeciesByDay = null;
-        IsSpeciesListFiltered = false;
+        IsFilteredByDay = false;
 
-        // Load all capture dates to drive the species-list day-filter dropdowns
+        // Load all capture dates to drive the shared day-filter dropdowns
         var allDates = await _captureStorage.GetAllCaptureDatesAsync();
         _allCaptureDates = new HashSet<DateTime>(allDates);
-        var slYears = allDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
-        AvailableSpeciesListYears.Clear();
-        foreach (var y in slYears) AvailableSpeciesListYears.Add(y);
-        SpeciesListFilterYear = slYears.Count > 0 ? slYears[0] : DateTime.Today.Year;
-        // ↑ triggers OnSpeciesListFilterYearChanged → RefreshSpeciesListMonths → RefreshSpeciesListDays
+        var years = allDates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
+        AvailableFilterYears.Clear();
+        foreach (var y in years) AvailableFilterYears.Add(y);
+        FilterYear = years.Count > 0 ? years[0] : DateTime.Today.Year;
+        // ↑ triggers OnFilterYearChanged → RefreshAvailableMonths → OnFilterMonthChanged → RefreshAvailableDays
 
         var summaries = await _captureStorage.GetAllSpeciesSummariesAsync();
         _allSpecies = summaries.Select(s => new SpeciesCardViewModel(s)).ToList();
@@ -472,14 +435,9 @@ public partial class GalleryViewModel : ViewModelBase
         await LoadCapturesAsync(card.Summary.SpeciesId);
         CurrentView = GalleryView.SpeciesDetail;
 
-        // When drilling in from a date-filtered species list, auto-apply the day filter
-        if (IsSpeciesListFiltered && SpeciesListFilterYear > 0 && SpeciesListFilterMonth > 0 && SpeciesListFilterDay > 0)
-        {
-            FilterYear  = SpeciesListFilterYear;
-            FilterMonth = SpeciesListFilterMonth;
-            FilterDay   = SpeciesListFilterDay;
+        // When drilling in from a date-filtered species list, auto-apply the shared day filter to shots
+        if (IsFilteredByDay && FilterYear > 0 && FilterMonth > 0 && FilterDay > 0)
             await FilterByDayAsync();
-        }
     }
 
     [RelayCommand]
@@ -489,9 +447,9 @@ public partial class GalleryViewModel : ViewModelBase
     private void Back()
     {
         IsSelectionMode  = false;
-        IsFilteredByDay  = false;
         CurrentView      = GalleryView.SpeciesList;
         _selectedSpecies = null;
+        // IsFilteredByDay intentionally preserved — species list retains the active date filter
     }
 
     [RelayCommand]
@@ -530,19 +488,8 @@ public partial class GalleryViewModel : ViewModelBase
     {
         _currentSpeciesId  = speciesId;
         _capturePageOffset = 0;
-        IsFilteredByDay    = false;
-
-        // Load all distinct capture dates, then derive year/month/day dropdown lists.
-        var dates = await _captureStorage.GetCaptureDatesForSpeciesAsync(speciesId);
-        _availableDates = new HashSet<DateTime>(dates);
-
-        var years = dates.Select(d => d.Year).Distinct().OrderByDescending(y => y).ToList();
-        AvailableFilterYears.Clear();
-        foreach (var y in years) AvailableFilterYears.Add(y);
-
-        // Setting FilterYear triggers OnFilterYearChanged → RefreshAvailableMonths →
-        // OnFilterMonthChanged → RefreshAvailableDays automatically.
-        FilterYear = years.Count > 0 ? years[0] : DateTime.Today.Year;
+        // Note: IsFilteredByDay and AvailableFilterYears/Months/Days are managed by the shared filter —
+        // do NOT reset them here so the date selection stays consistent across both views.
 
         var captures = await _captureStorage.GetCapturesBySpeciesAsync(speciesId, 0, CapturePageSize);
         // Build VMs on background thread to keep File.Exists calls off the UI thread
@@ -581,7 +528,7 @@ public partial class GalleryViewModel : ViewModelBase
         }
     }
 
-    // ── Day filter commands ───────────────────────────────────────────────
+    // ── Day filter commands (shared — controls both species list and shot list) ──
 
     [RelayCommand]
     private async Task FilterByDayAsync()
@@ -590,23 +537,37 @@ public partial class GalleryViewModel : ViewModelBase
         DateTime date;
         try { date = new DateTime(FilterYear, FilterMonth, FilterDay); }
         catch (ArgumentOutOfRangeException) { return; }
-        // Only filter if this date actually has captures (guard against stale selection)
-        if (!_availableDates.Contains(date)) return;
+
+        // Filter the species list
+        var summaries = await _captureStorage.GetSpeciesSummariesForDateAsync(date);
+        _filteredSpeciesByDay = summaries.Select(s => new SpeciesCardViewModel(s)).ToList();
 
         // Set flag BEFORE ResetWith so code-behind sees it when CollectionChanged fires
         IsFilteredByDay = true;
-        var captures = await _captureStorage.GetCapturesBySpeciesAndDateAsync(_currentSpeciesId, date);
-        var cards = await Task.Run(() => captures.Select(c => new CaptureCardViewModel(c)).ToList());
-        SelectedCaptures.ResetWith(cards);
-        HasMoreCaptures = false;
+        ApplyFilter();
+
+        // If currently viewing a species' shots, also filter them to this date
+        if (CurrentView == GalleryView.SpeciesDetail && _currentSpeciesId > 0)
+        {
+            var captures = await _captureStorage.GetCapturesBySpeciesAndDateAsync(_currentSpeciesId, date);
+            var cards = await Task.Run(() => captures.Select(c => new CaptureCardViewModel(c)).ToList());
+            SelectedCaptures.ResetWith(cards);
+            HasMoreCaptures = false;
+        }
     }
 
     [RelayCommand]
     private async Task ShowAllCapturesAsync()
     {
+        // Restore species list
+        _filteredSpeciesByDay = null;
         // Set flag BEFORE ResetWith so code-behind can restore pre-filter scroll offset
         IsFilteredByDay = false;
-        await LoadCapturesAsync(_currentSpeciesId);
+        ApplyFilter();
+
+        // If currently viewing a species' shots, reload all shots
+        if (CurrentView == GalleryView.SpeciesDetail && _currentSpeciesId > 0)
+            await LoadCapturesAsync(_currentSpeciesId);
     }
 
     // ── Calendar commands ─────────────────────────────────────────────────
@@ -643,37 +604,15 @@ public partial class GalleryViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task FilterSpeciesListByDayAsync()
-    {
-        if (SpeciesListFilterYear == 0 || SpeciesListFilterMonth == 0 || SpeciesListFilterDay == 0) return;
-        DateTime date;
-        try { date = new DateTime(SpeciesListFilterYear, SpeciesListFilterMonth, SpeciesListFilterDay); }
-        catch (ArgumentOutOfRangeException) { return; }
-
-        var summaries = await _captureStorage.GetSpeciesSummariesForDateAsync(date);
-        _filteredSpeciesByDay = summaries.Select(s => new SpeciesCardViewModel(s)).ToList();
-        IsSpeciesListFiltered = true;
-        ApplyFilter();
-    }
-
-    [RelayCommand]
-    private void ShowAllSpecies()
-    {
-        _filteredSpeciesByDay = null;
-        IsSpeciesListFiltered = false;
-        ApplyFilter();
-    }
-
-    [RelayCommand]
     private async Task SelectDate(CalendarDayViewModel? day)
     {
         if (day is null || day.IsBlank || day.CaptureCount == 0) return;
         var date = day.Date!.Value;
-        // Set dropdowns to the clicked date and filter the species list
-        SpeciesListFilterYear  = date.Year;
-        SpeciesListFilterMonth = date.Month;
-        SpeciesListFilterDay   = date.Day;
-        await FilterSpeciesListByDayAsync();
+        // Set shared dropdowns to the clicked date and filter
+        FilterYear  = date.Year;
+        FilterMonth = date.Month;
+        FilterDay   = date.Day;
+        await FilterByDayAsync();
         CurrentView = GalleryView.SpeciesList;
     }
 

@@ -167,31 +167,31 @@
                     </Grid>
                 </Border>
 
-                <!-- Species list day filter bar -->
+                <!-- Species list day filter bar (shared filter — same state as species detail) -->
                 <Border DockPanel.Dock="Top" Background="#F5F5F5" Padding="16,8"
                         BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="Filter by day:" FontSize="12" Foreground="#555"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <ComboBox ItemsSource="{Binding AvailableSpeciesListYears}"
-                                  SelectedItem="{Binding SpeciesListFilterYear, Mode=TwoWay}"
+                        <ComboBox ItemsSource="{Binding AvailableFilterYears}"
+                                  SelectedItem="{Binding FilterYear, Mode=TwoWay}"
                                   Width="70" FontSize="12" Margin="0,0,4,0"
                                   VerticalContentAlignment="Center"/>
-                        <ComboBox ItemsSource="{Binding AvailableSpeciesListMonths}"
-                                  SelectedItem="{Binding SpeciesListFilterMonth, Mode=TwoWay}"
+                        <ComboBox ItemsSource="{Binding AvailableFilterMonths}"
+                                  SelectedItem="{Binding FilterMonth, Mode=TwoWay}"
                                   Width="46" FontSize="12" Margin="0,0,4,0"
                                   VerticalContentAlignment="Center"/>
-                        <ComboBox ItemsSource="{Binding AvailableSpeciesListDays}"
-                                  SelectedItem="{Binding SpeciesListFilterDay, Mode=TwoWay}"
+                        <ComboBox ItemsSource="{Binding AvailableFilterDays}"
+                                  SelectedItem="{Binding FilterDay, Mode=TwoWay}"
                                   Width="46" FontSize="12" Margin="0,0,12,0"
                                   VerticalContentAlignment="Center"/>
-                        <Button Content="Filter" Command="{Binding FilterSpeciesListByDayCommand}"
+                        <Button Content="Filter" Command="{Binding FilterByDayCommand}"
                                 Background="#2D5A27" Foreground="White" BorderThickness="0"
                                 Padding="10,4" FontSize="12" Cursor="Hand" Margin="0,0,8,0"/>
-                        <Button Content="Show All" Command="{Binding ShowAllSpeciesCommand}"
+                        <Button Content="Show All" Command="{Binding ShowAllCapturesCommand}"
                                 Background="#555555" Foreground="White" BorderThickness="0"
                                 Padding="10,4" FontSize="12" Cursor="Hand"
-                                Visibility="{Binding IsSpeciesListFiltered,
+                                Visibility="{Binding IsFilteredByDay,
                                              Converter={StaticResource BoolToVisibleConverter}}"/>
                     </StackPanel>
                 </Border>
