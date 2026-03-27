@@ -17,6 +17,7 @@ public record SpeciesSummary(
 public interface ICaptureStorageService
 {
     event EventHandler<CaptureRecord> CaptureSaved;
+    event EventHandler GalleryReset;
     Task SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null, DateTime? batchStartedAt = null);
     Task<IReadOnlyList<SpeciesSummary>> GetAllSpeciesSummariesAsync();
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId);
@@ -37,6 +38,7 @@ public interface ICaptureStorageService
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAndDateAsync(int speciesId, DateTime date);
     /// <summary>Returns the distinct date-only values (no time component) for all captures of the given species.</summary>
     Task<IReadOnlyList<DateTime>> GetCaptureDatesForSpeciesAsync(int speciesId);
+    Task<IReadOnlyList<SpeciesSummary>> GetSpeciesSummariesForDateAsync(DateTime date);
 }
 
 public record DailySummary(

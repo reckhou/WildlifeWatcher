@@ -56,26 +56,28 @@ public partial class GalleryViewModel : ViewModelBase
     public ObservableCollection<int> AvailableFilterDays   { get; } = new();
 
     // Calendar state
-    [ObservableProperty] private int       _calendarYear  = DateTime.Today.Year;
-    [ObservableProperty] private int       _calendarMonth = DateTime.Today.Month;
-    [ObservableProperty] private DateTime? _selectedDate;
+    [ObservableProperty] private int _calendarYear  = DateTime.Today.Year;
+    [ObservableProperty] private int _calendarMonth = DateTime.Today.Month;
+
+    // Species list date filter — set when navigating from a calendar day click
+    [ObservableProperty] private DateTime? _speciesListDateFilter;
+
+    public bool   IsSpeciesListDateFiltered => SpeciesListDateFilter.HasValue;
+    public string SpeciesListDateLabel      =>
+        SpeciesListDateFilter.HasValue
+            ? $"📅 {SpeciesListDateFilter.Value:d MMMM yyyy}"
+            : string.Empty;
 
     public string CalendarMonthLabel =>
         new DateTime(CalendarYear, CalendarMonth, 1).ToString("MMMM yyyy");
-
-    public string SelectedDateLabel =>
-        SelectedDate.HasValue
-            ? $"{SelectedDate.Value:d MMMM yyyy} — {SelectedDayCaptures.Count} capture(s)"
-            : string.Empty;
 
     public bool IsShowingSpeciesList   => CurrentView == GalleryView.SpeciesList;
     public bool IsShowingSpeciesDetail => CurrentView == GalleryView.SpeciesDetail;
     public bool IsShowingCalendarView  => CurrentView == GalleryView.CalendarView;
 
-    public ObservableCollection<SpeciesCardViewModel>     FilteredSpecies     { get; } = new();
-    public RangeObservableCollection<CaptureCardViewModel> SelectedCaptures  { get; } = new();
-    public ObservableCollection<CalendarDayViewModel>     CalendarDays        { get; } = new();
-    public ObservableCollection<CaptureCardViewModel>     SelectedDayCaptures { get; } = new();
+    public ObservableCollection<SpeciesCardViewModel>      FilteredSpecies  { get; } = new();
+    public RangeObservableCollection<CaptureCardViewModel> SelectedCaptures { get; } = new();
+    public ObservableCollection<CalendarDayViewModel>      CalendarDays     { get; } = new();
 
     public GalleryViewModel(ICaptureStorageService captureStorage, ISettingsService settings, IBirdPhotoService birdPhotoService, ILogger<GalleryViewModel> logger)
     {
@@ -84,6 +86,22 @@ public partial class GalleryViewModel : ViewModelBase
         _birdPhotoService = birdPhotoService;
         _logger           = logger;
         _captureStorage.CaptureSaved += OnCaptureSaved;
+        _captureStorage.GalleryReset += async (_, _) =>
+        {
+            try
+            {
+                await Application.Current.Dispatcher
+                    .InvokeAsync(() => LoadAsync()).Task.Unwrap();
+                Application.Current.Dispatcher.Invoke(() => CurrentView = GalleryView.SpeciesList);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to reload gallery after reset"); }
+        };
+    }
+
+    partial void OnSpeciesListDateFilterChanged(DateTime? value)
+    {
+        OnPropertyChanged(nameof(IsSpeciesListDateFiltered));
+        OnPropertyChanged(nameof(SpeciesListDateLabel));
     }
 
     partial void OnIsRefreshingPhotosChanged(bool value)
@@ -154,6 +172,7 @@ public partial class GalleryViewModel : ViewModelBase
 
     public async Task LoadAsync()
     {
+        SpeciesListDateFilter = null;
         var summaries = await _captureStorage.GetAllSpeciesSummariesAsync();
         _allSpecies = summaries.Select(s => new SpeciesCardViewModel(s)).ToList();
         ApplyFilter();
@@ -373,6 +392,16 @@ public partial class GalleryViewModel : ViewModelBase
         SelectedSpeciesScientificName  = card.Summary.ScientificName;
         await LoadCapturesAsync(card.Summary.SpeciesId);
         CurrentView = GalleryView.SpeciesDetail;
+
+        // When drilling in from a calendar date-filtered list, auto-apply the day filter
+        if (SpeciesListDateFilter.HasValue)
+        {
+            var d = SpeciesListDateFilter.Value;
+            FilterYear  = d.Year;
+            FilterMonth = d.Month;
+            FilterDay   = d.Day;
+            await FilterByDayAsync();
+        }
     }
 
     [RelayCommand]
@@ -397,6 +426,7 @@ public partial class GalleryViewModel : ViewModelBase
         IsFilteredByDay  = false;
         CurrentView      = GalleryView.SpeciesList;
         _selectedSpecies = null;
+        // Keep SpeciesListDateFilter so the badge stays visible when returning to the filtered list
     }
 
     [RelayCommand]
@@ -551,37 +581,24 @@ public partial class GalleryViewModel : ViewModelBase
     private async Task SelectDate(CalendarDayViewModel? day)
     {
         if (day is null || day.IsBlank || day.CaptureCount == 0) return;
-        SelectedDate = day.Date;
-        var captures = await _captureStorage.GetCapturesByDateAsync(day.Date!.Value);
-        SelectedDayCaptures.Clear();
-        foreach (var c in captures)
-            SelectedDayCaptures.Add(new CaptureCardViewModel(c));
-        OnPropertyChanged(nameof(SelectedDateLabel));
+        var date     = day.Date!.Value;
+        var summaries = await _captureStorage.GetSpeciesSummariesForDateAsync(date);
+        _allSpecies  = summaries.Select(s => new SpeciesCardViewModel(s)).ToList();
+        SpeciesListDateFilter = date;
+        ApplyFilter();
+        CurrentView = GalleryView.SpeciesList;
     }
 
     [RelayCommand]
-    private async Task OpenDayCapture(CaptureCardViewModel card)
+    private async Task ClearSpeciesDateFilter()
     {
-        var dialog = new CaptureDetailDialog(card.Record, _captureStorage);
-        dialog.ShowDialog();
-        var savedDate = SelectedDate;
-        await LoadCalendarAsync();
-        if (savedDate.HasValue)
-        {
-            SelectedDate = savedDate;
-            var captures = await _captureStorage.GetCapturesByDateAsync(savedDate.Value);
-            SelectedDayCaptures.Clear();
-            foreach (var c in captures)
-                SelectedDayCaptures.Add(new CaptureCardViewModel(c));
-            OnPropertyChanged(nameof(SelectedDateLabel));
-        }
+        SpeciesListDateFilter = null;
+        await LoadAsync();
     }
 
     private async Task LoadCalendarAsync()
     {
         CalendarDays.Clear();
-        SelectedDate = null;
-        SelectedDayCaptures.Clear();
 
         var summaries = await _captureStorage.GetCaptureDailySummaryForMonthAsync(CalendarYear, CalendarMonth);
 
@@ -603,6 +620,5 @@ public partial class GalleryViewModel : ViewModelBase
         }
 
         OnPropertyChanged(nameof(CalendarMonthLabel));
-        OnPropertyChanged(nameof(SelectedDateLabel));
     }
 }

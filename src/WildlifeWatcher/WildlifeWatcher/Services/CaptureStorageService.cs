@@ -17,6 +17,7 @@ public class CaptureStorageService : ICaptureStorageService
     private readonly ILogger<CaptureStorageService> _logger;
 
     public event EventHandler<CaptureRecord>? CaptureSaved;
+    public event EventHandler? GalleryReset;
 
     public CaptureStorageService(
         IDbContextFactory<WildlifeDbContext> dbFactory,
@@ -177,6 +178,7 @@ public class CaptureStorageService : ICaptureStorageService
         await using var db = await _dbFactory.CreateDbContextAsync();
         await db.CaptureRecords.ExecuteDeleteAsync();
         await db.Species.ExecuteDeleteAsync();
+        GalleryReset?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task<IReadOnlyList<SpeciesSummary>> GetAllSpeciesSummariesAsync()
@@ -401,6 +403,27 @@ public class CaptureStorageService : ICaptureStorageService
             .OrderByDescending(d => d)
             .ToListAsync();
         return dates;
+    }
+
+    public async Task<IReadOnlyList<SpeciesSummary>> GetSpeciesSummariesForDateAsync(DateTime date)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var start = date.Date;
+        var end   = start.AddDays(1);
+        return await db.Species
+            .Include(s => s.Captures)
+            .Where(s => s.Captures.Any(c => c.CapturedAt >= start && c.CapturedAt < end))
+            .Select(s => new SpeciesSummary(
+                s.Id,
+                s.CommonName,
+                s.ScientificName,
+                s.Description,
+                s.FirstDetectedAt,
+                s.ReferencePhotoPath,
+                s.Captures.Count,
+                s.Captures.Any() ? s.Captures.Max(c => c.CapturedAt) : s.FirstDetectedAt,
+                s.Captures.OrderByDescending(c => c.CapturedAt).Select(c => c.ImageFilePath).FirstOrDefault()))
+            .ToListAsync();
     }
 
     private static Task<byte[]> DrawPoiOverlay(byte[] jpegBytes, IReadOnlyList<PoiRegion> regions, string speciesLabel, int? sourcePoiIndex)
