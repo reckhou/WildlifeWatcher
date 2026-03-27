@@ -302,7 +302,14 @@ public class CaptureStorageService : ICaptureStorageService
 
         var rows = await db.CaptureRecords
             .Where(c => c.CapturedAt >= start && c.CapturedAt < end)
-            .Select(c => new { c.CapturedAt, c.WeatherCondition })
+            .Select(c => new {
+                c.CapturedAt,
+                c.WeatherCondition,
+                c.Temperature,
+                c.Precipitation,
+                c.Sunrise,
+                c.Sunset
+            })
             .ToListAsync();
 
         return rows
@@ -311,7 +318,11 @@ public class CaptureStorageService : ICaptureStorageService
                 g => g.Key,
                 g => new DailySummary(
                     g.Count(),
-                    g.Select(c => c.WeatherCondition).FirstOrDefault(w => w != null)));
+                    g.Select(c => c.WeatherCondition).FirstOrDefault(w => w != null),
+                    g.Select(c => c.Temperature).FirstOrDefault(v => v.HasValue),
+                    g.Select(c => c.Precipitation).FirstOrDefault(v => v.HasValue),
+                    g.Select(c => c.Sunrise).FirstOrDefault(v => v.HasValue),
+                    g.Select(c => c.Sunset).FirstOrDefault(v => v.HasValue)));
     }
 
     public async Task ReassignCaptureAsync(int captureId, int newSpeciesId)

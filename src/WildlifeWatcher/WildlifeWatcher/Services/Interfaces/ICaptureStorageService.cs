@@ -39,4 +39,10 @@ public interface ICaptureStorageService
     Task<IReadOnlyList<DateTime>> GetCaptureDatesForSpeciesAsync(int speciesId);
 }
 
-public record DailySummary(int Count, string? WeatherCondition);
+public record DailySummary(
+    int       Count,
+    string?   WeatherCondition,
+    double?   Temperature,
+    double?   Precipitation,
+    DateTime? Sunrise,
+    DateTime? Sunset);
