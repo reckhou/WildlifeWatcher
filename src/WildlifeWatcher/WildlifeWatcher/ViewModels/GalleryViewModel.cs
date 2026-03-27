@@ -173,6 +173,8 @@ public partial class GalleryViewModel : ViewModelBase
         foreach (var m in months) AvailableFilterMonths.Add(m);
 
         FilterMonth = months.Contains(FilterMonth) ? FilterMonth : (months.Count > 0 ? months[0] : 0);
+        // Always rebuild days — the available-date set may have changed even if FilterMonth is unchanged
+        RefreshAvailableDays();
     }
 
     private void RefreshAvailableDays()
@@ -627,10 +629,12 @@ public partial class GalleryViewModel : ViewModelBase
     {
         if (day is null || day.IsBlank || day.CaptureCount == 0) return;
         var date = day.Date!.Value;
-        // Set shared dropdowns to the clicked date and filter
+        // Switch to all-dates context so all three dropdowns reflect the full date set
+        _availableDates = _allCaptureDates;
+        // Set year first (triggers cascade), then override month/day with the exact clicked values
         FilterYear  = date.Year;
-        FilterMonth = date.Month;
-        FilterDay   = date.Day;
+        FilterMonth = date.Month;  // overrides cascade result; triggers RefreshAvailableDays
+        FilterDay   = date.Day;    // valid: RefreshAvailableDays already ran for this year/month
         await FilterByDayAsync();
         CurrentView = GalleryView.SpeciesList;
     }
