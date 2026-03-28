@@ -59,8 +59,12 @@ public partial class DetectionSettingsViewModel : ViewModelBase
 
     // ── Test POI ───────────────────────────────────────────────────────────
 
-    [ObservableProperty] private string _testPoiStatus  = string.Empty;
+    [ObservableProperty] private string _testPoiStatus              = string.Empty;
     [ObservableProperty] private bool   _isTestPoiRunning;
+    [ObservableProperty] private bool   _isContinuousTestRunning;
+    [ObservableProperty] private int    _continuousTestIntervalSeconds = 5;
+
+    private CancellationTokenSource? _continuousCts;
 
     // ── Provider list ──────────────────────────────────────────────────────
 
@@ -259,7 +263,13 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         finally { IsCapturingZoneBackground = false; }
     }
 
-    // ── Test POI ───────────────────────────────────────────────────────────
+    partial void OnContinuousTestIntervalSecondsChanged(int value)
+    {
+        if (value < 1)  ContinuousTestIntervalSeconds = 1;
+        else if (value > 30) ContinuousTestIntervalSeconds = 30;
+    }
+
+    // ── Test POI commands ─────────────────────────────────────────────────
 
     [RelayCommand(CanExecute = nameof(CanTestPoi))]
     private async Task TestPoiAsync()
@@ -282,5 +292,41 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         }
     }
 
-    private bool CanTestPoi() => !IsTestPoiRunning;
+    private bool CanTestPoi() => !IsTestPoiRunning && !IsContinuousTestRunning;
+
+    [RelayCommand]
+    private async Task ToggleContinuousTestAsync()
+    {
+        if (IsContinuousTestRunning)
+        {
+            _continuousCts?.Cancel();
+            return;
+        }
+
+        IsContinuousTestRunning = true;
+        TestPoiCommand.NotifyCanExecuteChanged();
+        _continuousCts = new CancellationTokenSource();
+        try
+        {
+            var interval = TimeSpan.FromSeconds(Math.Clamp(ContinuousTestIntervalSeconds, 1, 30));
+            using var timer = new System.Threading.PeriodicTimer(interval);
+            while (await timer.WaitForNextTickAsync(_continuousCts.Token))
+            {
+                var result = await _recognitionLoop.TriggerTestPoiAsync();
+                Application.Current.Dispatcher.Invoke(() => TestPoiStatus = $"[Auto] {result}");
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Application.Current.Dispatcher.Invoke(() => TestPoiStatus = $"[Auto] Error: {ex.Message}");
+        }
+        finally
+        {
+            IsContinuousTestRunning = false;
+            _continuousCts?.Dispose();
+            _continuousCts = null;
+            TestPoiCommand.NotifyCanExecuteChanged();
+        }
+    }
 }

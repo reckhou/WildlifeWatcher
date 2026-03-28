@@ -315,21 +315,57 @@
             <!-- ═══ POI Testing ═══ -->
             <TextBlock Text="POI Testing" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
-            <TextBlock Text="Force a single detection cycle (frame capture → motion analysis → POI extraction → save crops to captures folder). AI recognition is not called."
-                       Style="{StaticResource Hint}"/>
 
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
-                <Button Content="▶ Test POI"
+            <!-- One-shot -->
+            <TextBlock Text="One-shot test" Style="{StaticResource Label}" FontWeight="SemiBold"/>
+            <TextBlock Text="Runs a single detection cycle immediately (frame capture → motion analysis → POI extraction → save crops). AI recognition is not called."
+                       Style="{StaticResource Hint}"/>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                <Button Content="▶ Test Once"
                         Command="{Binding TestPoiCommand}"
                         Background="#2D5A27" Foreground="White"
                         BorderThickness="0" Padding="12,6"
-                        Cursor="Hand" FontSize="12"/>
+                        Cursor="Hand" FontSize="12"
+                        ToolTip="Run one detection cycle now (no AI)"/>
                 <ProgressBar IsIndeterminate="True" Width="60" Height="8" Margin="8,0,0,0"
                              VerticalAlignment="Center"
                              Visibility="{Binding IsTestPoiRunning, Converter={StaticResource BoolToVisibleConverter}}"/>
             </StackPanel>
+
+            <!-- Continuous -->
+            <TextBlock Text="Continuous test" Style="{StaticResource Label}" FontWeight="SemiBold"/>
+            <TextBlock Text="Repeat a detection cycle automatically at a fixed interval. Useful for tuning motion zones and sensitivity in real time."
+                       Style="{StaticResource Hint}"/>
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,4" VerticalAlignment="Center">
+                <TextBlock Text="Interval (1–30 s):" FontSize="12" Foreground="#444"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Text="{Binding ContinuousTestIntervalSeconds, UpdateSourceTrigger=PropertyChanged}"
+                         Width="50" Padding="6,4" BorderBrush="#CCCCCC" FontSize="12"
+                         IsEnabled="{Binding IsContinuousTestRunning, Converter={StaticResource BoolToCollapsedConverter}}"/>
+                <Button Margin="8,0,0,0" Padding="12,6" BorderThickness="0"
+                        Cursor="Hand" FontSize="12"
+                        Command="{Binding ToggleContinuousTestCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Content"     Value="▶ Start Continuous"/>
+                            <Setter Property="Background"  Value="#2D5A27"/>
+                            <Setter Property="Foreground"  Value="White"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsContinuousTestRunning}" Value="True">
+                                    <Setter Property="Content"    Value="⏹ Stop"/>
+                                    <Setter Property="Background" Value="#8B0000"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <ProgressBar IsIndeterminate="True" Width="60" Height="8" Margin="8,0,0,0"
+                             VerticalAlignment="Center"
+                             Visibility="{Binding IsContinuousTestRunning, Converter={StaticResource BoolToVisibleConverter}}"/>
+            </StackPanel>
+
             <TextBlock Text="{Binding TestPoiStatus}"
-                       FontSize="11" Foreground="#555" Margin="0,2,0,24"
+                       FontSize="11" Foreground="#555" Margin="0,4,0,24"
                        TextWrapping="Wrap"/>
 
         </StackPanel>
