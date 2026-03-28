@@ -294,7 +294,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
 
     private bool CanTestPoi() => !IsTestPoiRunning && !IsContinuousTestRunning;
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task ToggleContinuousTestAsync()
     {
         if (IsContinuousTestRunning)
