@@ -11,7 +11,7 @@
 ## Progress
 
 - [x] Task 1: Persist POI test interval + auto-capture on open
-- [ ] Task 2: Reorder and rename sections in XAML
+- [x] Task 2: Reorder and rename sections in XAML
 
 ---
 
