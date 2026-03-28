@@ -23,7 +23,6 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
     public bool IsRunning   { get; private set; }
     public bool IsAnalyzing { get; private set; }
-    public bool IsDebugMode { get; set; }
 
     public event EventHandler<DetectionEvent>?               DetectionOccurred;
     public event EventHandler<bool>?                         IsAnalyzingChanged;
@@ -166,18 +165,6 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             }
         }
 
-        // ── Debug mode: save POIs locally, skip AI ───────────────────────
-        if (IsDebugMode)
-        {
-            bool inCooldown   = DateTime.UtcNow < _cooldownUntil;
-            var  poiLabel     = inCooldown
-                ? $"NOT sent to AI (cooldown — {(_cooldownUntil - DateTime.UtcNow).TotalSeconds:F0}s remaining)"
-                : "Would be sent to AI (debug mode — AI skipped)";
-            _logger.LogInformation("Debug mode: saving {Count} POI(s) [{Label}]", poiRegions.Count, poiLabel);
-            await SaveDebugPoiAsync(currentFrame, poiRegions, settings, poiLabel, ct);
-            return;
-        }
-
         // ── Cooldown check ───────────────────────────────────────────────
         if (DateTime.UtcNow < _cooldownUntil)
         {
@@ -245,6 +232,45 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         {
             SetAnalyzing(false);
         }
+    }
+
+    // ── Test POI ──────────────────────────────────────────────────────────
+
+    public async Task<string> TriggerTestPoiAsync()
+    {
+        if (!_camera.IsConnected)
+            return "Camera not connected.";
+
+        var frame = await _camera.ExtractFrameAsync();
+        if (frame == null)
+            return "Failed to extract frame.";
+
+        var settings = _settings.CurrentSettings;
+
+        _background.ProcessFrame(frame);
+        var fg           = _background.Foreground;
+        var temporalDelta = _background.TemporalDelta;
+        if (fg == null)
+            return "Background model not ready yet (first frame).";
+
+        var zones = settings.MotionWhitelistZones.Count > 0
+            ? (IReadOnlyList<MotionZone>)settings.MotionWhitelistZones : null;
+
+        IReadOnlyList<PoiRegion> regions = Array.Empty<PoiRegion>();
+        if (settings.EnablePoiExtraction)
+        {
+            regions = _poi.ExtractRegions(fg, frame, zones, settings.MotionPixelThreshold,
+                settings.PoiSensitivity, temporalDelta, settings.MotionTemporalThreshold,
+                settings.MotionTemporalCellFraction);
+            _logger.LogInformation("Test POI extraction: {Count} region(s) found", regions.Count);
+            PoiRegionsDetected?.Invoke(this, regions);
+        }
+
+        if (regions.Count == 0)
+            return "POI extraction found 0 regions — nothing to save.";
+
+        await SaveDebugPoiAsync(frame, regions, settings, "Test POI (no AI)", CancellationToken.None);
+        return $"Test POI: {regions.Count} region(s) found and saved to captures folder.";
     }
 
     // ── Debug saving ──────────────────────────────────────────────────────

@@ -23,7 +23,6 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty] private AppPage _currentPage = AppPage.LiveView;
     [ObservableProperty] private string  _statusText  = "Ready";
     [ObservableProperty] private bool    _isConnected;
-    [ObservableProperty] private bool    _isDebugMode;
     [ObservableProperty] private bool    _isUpdateAvailable;
     [ObservableProperty] private string  _updateBannerText = string.Empty;
     [ObservableProperty] private bool    _isUpdating;
@@ -72,9 +71,6 @@ public partial class MainViewModel : ViewModelBase
             }
         });
     }
-
-    partial void OnIsDebugModeChanged(bool value) =>
-        _recognitionLoop.IsDebugMode = value;
 
     [RelayCommand]
     private void NavigateTo(AppPage page) => CurrentPage = page;

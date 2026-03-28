@@ -6,7 +6,6 @@ public interface IRecognitionLoopService
 {
     bool IsRunning   { get; }
     bool IsAnalyzing { get; }
-    bool IsDebugMode { get; set; }
     event EventHandler<DetectionEvent>               DetectionOccurred;
     event EventHandler<bool>                         IsAnalyzingChanged;
     /// <summary>Fired every tick when POI regions are extracted (empty list clears the overlay).</summary>
@@ -17,4 +16,10 @@ public interface IRecognitionLoopService
     /// Only fires on state transitions, not every tick.
     /// </summary>
     event EventHandler<bool> DaylightWindowChanged;
+
+    /// <summary>
+    /// Runs a single POI detection tick (frame extract → background model → POI extraction → save debug crops).
+    /// Skips AI recognition. Returns a summary string describing what was found and saved.
+    /// </summary>
+    Task<string> TriggerTestPoiAsync();
 }
