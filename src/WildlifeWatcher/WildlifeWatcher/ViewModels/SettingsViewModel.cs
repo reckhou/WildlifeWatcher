@@ -30,8 +30,8 @@ public partial class SettingsViewModel : ViewModelBase
     private readonly ILogger<SettingsViewModel> _logger;
 
     // Track saved paths for migration detection
-    private string  _savedCapturesDirectory      = string.Empty;
-    private string  _savedDatabasePath           = string.Empty;
+    private string  _savedCapturesDirectory = string.Empty;
+    private string  _savedDatabasePath      = string.Empty;
     private double? _selectedLatitude;
     private double? _selectedLongitude;
     private bool    _debugForceUpdateAvailable;
@@ -43,38 +43,11 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _testConnectionStatus = string.Empty;
     [ObservableProperty] private Brush _testConnectionStatusColor = Brushes.Gray;
 
-    // Capture
-    [ObservableProperty] private int _cooldownSeconds = 30;
-    [ObservableProperty] private int _speciesCooldownMinutes = 5;
-    [ObservableProperty] private int _frameIntervalSeconds = 30;
-    [ObservableProperty] private string _capturesDirectory = "captures";
-    [ObservableProperty] private double _minConfidenceThreshold = 0.7;
-    [ObservableProperty] private double _motionBackgroundAlpha = 0.05;
-    [ObservableProperty] private int    _motionPixelThreshold = 25;
-    [ObservableProperty] private int    _motionTemporalThreshold = 8;
-    [ObservableProperty] private double _motionTemporalCellFraction = 0.10;
-
     // Data & Storage
+    [ObservableProperty] private string _capturesDirectory = "captures";
     [ObservableProperty] private string _databasePath = string.Empty;
 
-    // AI
-    [ObservableProperty] private AiProvider _aiProvider = AiProvider.Claude;
-    [ObservableProperty] private string     _claudeModel = "claude-haiku-4-5-20251001";
-    [ObservableProperty] private string     _anthropicApiKey = string.Empty;
-    [ObservableProperty] private string     _geminiModel = "gemini-2.0-flash";
-    [ObservableProperty] private string     _geminiApiKey = string.Empty;
-
-    // POI
-    [ObservableProperty] private bool _enablePoiExtraction = true;
-    [ObservableProperty] private bool _savePoiDebugImages  = true;
-    [ObservableProperty] private double _poiSensitivity    = 0.5;
-
-    // Daylight detection
-    [ObservableProperty] private bool _enableDaylightDetectionOnly;
-    [ObservableProperty] private int  _sunriseOffsetMinutes = -30;
-    [ObservableProperty] private int  _sunsetOffsetMinutes  = 30;
-
-    // Location (Phase 6)
+    // Location
     [ObservableProperty] private string _locationQuery        = string.Empty;
     [ObservableProperty] private string _locationSearchStatus = string.Empty;
     [ObservableProperty] private string _locationName         = string.Empty;
@@ -96,71 +69,6 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private bool   _isInstalling;
     [ObservableProperty] private int    _installProgress;
     private UpdateInfo? _pendingUpdate;
-
-    // Motion Zones
-    [ObservableProperty] private byte[]? _zoneEditorBackground;
-    [ObservableProperty] private bool    _isCapturingZoneBackground;
-    public ObservableCollection<MotionZoneItem> MotionZones { get; } = new();
-
-    private const double ZoneCanvasW = 560;
-    private const double ZoneCanvasH = 315;
-
-    public IEnumerable<AiProvider> AiProviders => Enum.GetValues<AiProvider>();
-
-    public string AlphaAdvice
-    {
-        get
-        {
-            int frames  = (int)Math.Ceiling(Math.Log(0.05) / Math.Log(1 - MotionBackgroundAlpha));
-            int seconds = frames * FrameIntervalSeconds;
-            int minutes = seconds / 60;
-            return $"At α={MotionBackgroundAlpha:F2} with {FrameIntervalSeconds}s interval: " +
-                   $"training completes in ~{minutes} min ({frames} frames). " +
-                   (MotionBackgroundAlpha <= 0.05
-                       ? "Slow adapt — better for persistent subjects, longer noise suppression."
-                       : "Fast adapt — quicker day/night recovery, subjects absorbed sooner.");
-        }
-    }
-
-    public string PoiSensitivityAdvice =>
-        PoiSensitivity < 0.3
-            ? "Conservative — detects only large, high-contrast subjects (pigeons, cats)"
-            : PoiSensitivity <= 0.6
-                ? "Balanced — good for medium-sized birds"
-                : PoiSensitivity <= 0.85
-                    ? "Sensitive — detects smaller birds (goldfinches, sparrows); may increase false positives"
-                    : "Very sensitive — single-cell detection enabled; best for small/distant subjects but expect more noise";
-
-    public string PixelThresholdAdvice =>
-        MotionPixelThreshold < 15
-            ? $"Warning: {MotionPixelThreshold} is below the noise floor — expect false triggers from camera noise and JPEG artifacts. Recommended: 20–30."
-            : MotionPixelThreshold <= 20
-                ? $"Current: {MotionPixelThreshold} — sensitive; may fire on compression artefacts in low light. Recommended: 20–30 for outdoor cameras."
-                : MotionPixelThreshold <= 35
-                    ? $"Current: {MotionPixelThreshold} — good balance. Ignores sensor noise/JPEG artefacts; detects real movement reliably. Recommended range: 20–30."
-                    : $"Current: {MotionPixelThreshold} — high threshold; only strong contrast changes trigger. May miss small or camouflaged subjects.";
-
-    public string TemporalThresholdAdvice =>
-        MotionTemporalThreshold <= 5
-            ? $"Warning: {MotionTemporalThreshold} is very low — may detect static shadows as motion. Recommended: 6–15."
-            : MotionTemporalThreshold <= 12
-                ? $"Current: {MotionTemporalThreshold} — good balance. Filters static shadows while detecting actual movement. Recommended range: 6–15."
-                : $"Current: {MotionTemporalThreshold} — high threshold; only fast motion detected. May miss slow-moving subjects.";
-
-    public bool ShowDaylightLocationWarning =>
-        EnableDaylightDetectionOnly && string.IsNullOrWhiteSpace(LocationName) && _selectedLatitude is null;
-
-    partial void OnMotionBackgroundAlphaChanged(double value)  => OnPropertyChanged(nameof(AlphaAdvice));
-    partial void OnFrameIntervalSecondsChanged(int value)      => OnPropertyChanged(nameof(AlphaAdvice));
-    partial void OnMotionPixelThresholdChanged(int value)      => OnPropertyChanged(nameof(PixelThresholdAdvice));
-    partial void OnMotionTemporalThresholdChanged(int value)    => OnPropertyChanged(nameof(TemporalThresholdAdvice));
-    partial void OnPoiSensitivityChanged(double value)        => OnPropertyChanged(nameof(PoiSensitivityAdvice));
-
-    partial void OnEnableDaylightDetectionOnlyChanged(bool value) =>
-        OnPropertyChanged(nameof(ShowDaylightLocationWarning));
-
-    partial void OnLocationNameChanged(string value) =>
-        OnPropertyChanged(nameof(ShowDaylightLocationWarning));
 
     public SettingsViewModel(
         ISettingsService         settingsService,
@@ -191,31 +99,14 @@ public partial class SettingsViewModel : ViewModelBase
     private void LoadSettings()
     {
         var s = _settingsService.CurrentSettings;
-        RtspUrl                = s.RtspUrl;
-        CooldownSeconds        = s.CooldownSeconds;
-        SpeciesCooldownMinutes = s.SpeciesCooldownMinutes;
-        FrameIntervalSeconds   = s.FrameExtractionIntervalSeconds;
-        CapturesDirectory      = s.CapturesDirectory;
-        MinConfidenceThreshold = s.MinConfidenceThreshold;
-        MotionBackgroundAlpha  = s.MotionBackgroundAlpha;
-        MotionPixelThreshold   = s.MotionPixelThreshold;
-        MotionTemporalThreshold = s.MotionTemporalThreshold;
-        MotionTemporalCellFraction = s.MotionTemporalCellFraction;
-        EnablePoiExtraction    = s.EnablePoiExtraction;
-        SavePoiDebugImages     = s.SavePoiDebugImages;
-        PoiSensitivity         = s.PoiSensitivity;
-        AiProvider             = s.AiProvider;
-        ClaudeModel            = s.ClaudeModel;
-        GeminiModel            = s.GeminiModel;
-        DatabasePath           = s.DatabasePath;
+        RtspUrl           = s.RtspUrl;
+        CapturesDirectory = s.CapturesDirectory;
+        DatabasePath      = s.DatabasePath;
 
-        _selectedLatitude            = s.Latitude;
-        _selectedLongitude           = s.Longitude;
-        LocationName                 = s.LocationName;
-        _debugForceUpdateAvailable   = s.DebugForceUpdateAvailable;
-        EnableDaylightDetectionOnly = s.EnableDaylightDetectionOnly;
-        SunriseOffsetMinutes        = s.SunriseOffsetMinutes;
-        SunsetOffsetMinutes         = s.SunsetOffsetMinutes;
+        _selectedLatitude          = s.Latitude;
+        _selectedLongitude         = s.Longitude;
+        LocationName               = s.LocationName;
+        _debugForceUpdateAvailable = s.DebugForceUpdateAvailable;
 
         _savedCapturesDirectory = s.CapturesDirectory;
         _savedDatabasePath      = s.DatabasePath;
@@ -223,13 +114,9 @@ public partial class SettingsViewModel : ViewModelBase
         var creds = _credentialService.LoadCredentials();
         if (creds != null)
         {
-            RtspUsername    = creds.RtspUsername;
-            RtspPassword    = creds.RtspPassword;
-            AnthropicApiKey = creds.AnthropicApiKey;
-            GeminiApiKey    = creds.GeminiApiKey;
+            RtspUsername = creds.RtspUsername;
+            RtspPassword = creds.RtspPassword;
         }
-
-        RefreshZoneItems();
     }
 
     [RelayCommand]
@@ -286,35 +173,24 @@ public partial class SettingsViewModel : ViewModelBase
         }
 
         // ── Persist settings ─────────────────────────────────────────────
-        _settingsService.Save(new AppConfiguration
-        {
-            RtspUrl                        = RtspUrl,
-            CooldownSeconds                = CooldownSeconds,
-            SpeciesCooldownMinutes         = SpeciesCooldownMinutes,
-            FrameExtractionIntervalSeconds = FrameIntervalSeconds,
-            CapturesDirectory              = CapturesDirectory,
-            MinConfidenceThreshold         = MinConfidenceThreshold,
-            MotionBackgroundAlpha          = MotionBackgroundAlpha,
-            MotionPixelThreshold           = MotionPixelThreshold,
-            MotionTemporalThreshold        = MotionTemporalThreshold,
-            MotionTemporalCellFraction     = MotionTemporalCellFraction,
-            AiProvider                     = AiProvider,
-            ClaudeModel                    = ClaudeModel,
-            GeminiModel                    = GeminiModel,
-            EnablePoiExtraction            = EnablePoiExtraction,
-            SavePoiDebugImages             = SavePoiDebugImages,
-            PoiSensitivity                 = PoiSensitivity,
-            DatabasePath                   = DatabasePath,
-            MotionWhitelistZones           = new List<MotionZone>(MotionZones.Select(z => z.ToMotionZone())),
-            Latitude                       = _selectedLatitude,
-            Longitude                      = _selectedLongitude,
-            LocationName                   = LocationName,
-            DebugForceUpdateAvailable      = _debugForceUpdateAvailable,
-            EnableDaylightDetectionOnly = EnableDaylightDetectionOnly,
-            SunriseOffsetMinutes        = SunriseOffsetMinutes,
-            SunsetOffsetMinutes         = SunsetOffsetMinutes,
-        });
-        _credentialService.SaveCredentials(RtspUsername, RtspPassword, AnthropicApiKey, GeminiApiKey);
+        // Mutate only Camera/Location/Data fields; detection settings are owned by DetectionSettingsViewModel
+        var s = _settingsService.CurrentSettings;
+        s.RtspUrl                    = RtspUrl;
+        s.CapturesDirectory          = CapturesDirectory;
+        s.DatabasePath               = DatabasePath;
+        s.Latitude                   = _selectedLatitude;
+        s.Longitude                  = _selectedLongitude;
+        s.LocationName               = LocationName;
+        s.DebugForceUpdateAvailable  = _debugForceUpdateAvailable;
+        _settingsService.Save(s);
+
+        // Preserve API keys — they are owned by DetectionSettingsViewModel
+        var existingCreds = _credentialService.LoadCredentials();
+        _credentialService.SaveCredentials(
+            RtspUsername, RtspPassword,
+            existingCreds?.AnthropicApiKey ?? string.Empty,
+            existingCreds?.GeminiApiKey    ?? string.Empty);
+
         SaveStatus = "Settings saved.";
         _logger.LogInformation("Settings saved by user");
     }
@@ -342,44 +218,6 @@ public partial class SettingsViewModel : ViewModelBase
         LocationName       = result.DisplayName;
         LocationResults.Clear();
         LocationSearchStatus = string.Empty;
-    }
-
-    // ── Motion Zone management ────────────────────────────────────────────
-
-    private void RefreshZoneItems()
-    {
-        MotionZones.Clear();
-        var zones = _settingsService.CurrentSettings.MotionWhitelistZones;
-        for (int i = 0; i < zones.Count; i++)
-            MotionZones.Add(MotionZoneItem.From(zones[i], i + 1, ZoneCanvasW, ZoneCanvasH));
-    }
-
-    public void AddZone(MotionZone zone)
-    {
-        _settingsService.CurrentSettings.MotionWhitelistZones.Add(zone);
-        RefreshZoneItems();
-    }
-
-    [RelayCommand]
-    public void RemoveZone(MotionZoneItem item)
-    {
-        _settingsService.CurrentSettings.MotionWhitelistZones.RemoveAt(item.Index - 1);
-        RefreshZoneItems();
-    }
-
-    [RelayCommand]
-    public void ClearZones()
-    {
-        _settingsService.CurrentSettings.MotionWhitelistZones.Clear();
-        MotionZones.Clear();
-    }
-
-    [RelayCommand]
-    private async Task CaptureZoneBackgroundAsync()
-    {
-        IsCapturingZoneBackground = true;
-        try   { ZoneEditorBackground = await _camera.ExtractFrameAsync(); }
-        finally { IsCapturingZoneBackground = false; }
     }
 
     [RelayCommand]
@@ -514,7 +352,6 @@ public partial class SettingsViewModel : ViewModelBase
         {
             ExportImportStatus = "Preparing import…";
 
-            // Write a job file for the import subprocess
             var job = new ImportJob
             {
                 ZipPath = dialog.FileName,
@@ -524,7 +361,6 @@ public partial class SettingsViewModel : ViewModelBase
             var jobPath = Path.Combine(Path.GetTempPath(), $"ww_import_{Guid.NewGuid():N}.json");
             await File.WriteAllTextAsync(jobPath, JsonSerializer.Serialize(job));
 
-            // Launch a new instance in import mode, then exit so DB file locks are released
             var psi = new ProcessStartInfo { FileName = Environment.ProcessPath!, UseShellExecute = false };
             psi.ArgumentList.Add($"--import-job={jobPath}");
             Process.Start(psi);
@@ -644,7 +480,6 @@ public partial class SettingsViewModel : ViewModelBase
                 return;
             }
 
-            // Apply regardless of version comparison
             IsUpdateCheckBusy = false;
             IsInstalling      = true;
             InstallUpdateCommand.NotifyCanExecuteChanged();
