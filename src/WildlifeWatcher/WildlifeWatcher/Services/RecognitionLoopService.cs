@@ -269,6 +269,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         if (regions.Count == 0)
             return "POI extraction found 0 regions — nothing to save.";
 
+        if (!settings.SavePoiDebugImages)
+            return $"Test POI: {regions.Count} region(s) found — debug image saving is disabled.";
+
         await SaveDebugPoiAsync(frame, regions, settings, "Test POI (no AI)", CancellationToken.None);
         return $"Test POI: {regions.Count} region(s) found and saved to captures folder.";
     }
