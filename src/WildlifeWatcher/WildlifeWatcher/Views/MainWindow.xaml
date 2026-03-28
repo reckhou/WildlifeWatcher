@@ -24,26 +24,6 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="DebugToggleStyle" TargetType="ToggleButton">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#CCDDCC"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Padding" Value="16,10"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Style.Triggers>
-                <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="#7A3000"/>
-                    <Setter Property="Foreground" Value="#FFCC88"/>
-                    <Setter Property="FontWeight" Value="Bold"/>
-                </Trigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#2D4A2D"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
     </Window.Resources>
 
     <Grid>
@@ -94,13 +74,9 @@
                     Command="{Binding NavigateToCommand}"
                     CommandParameter="{x:Static vm:AppPage.Settings}"
                     Style="{StaticResource NavButtonStyle}"/>
-
-            <Separator Background="#2D4A2D" Margin="16,8"/>
-
-            <ToggleButton Content="🐛 Debug Mode"
-                          IsChecked="{Binding IsDebugMode, Mode=TwoWay}"
-                          Style="{StaticResource DebugToggleStyle}"
-                          ToolTip="Save POI crops to disk instead of sending to AI"/>
+            <Button Content="Detection Settings"
+                    Command="{Binding OpenDetectionSettingsCommand}"
+                    Style="{StaticResource NavButtonStyle}"/>
         </StackPanel>
 
         <!-- Main content area -->

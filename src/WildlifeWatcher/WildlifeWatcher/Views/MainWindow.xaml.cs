@@ -6,15 +6,17 @@ namespace WildlifeWatcher.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly LiveViewPage _liveViewPage;
-    private readonly SettingsPage _settingsPage;
-    private readonly GalleryPage  _galleryPage;
+    private readonly LiveViewPage             _liveViewPage;
+    private readonly SettingsPage             _settingsPage;
+    private readonly GalleryPage              _galleryPage;
+    private readonly DetectionSettingsWindow  _detectionSettingsWindow;
 
     public MainWindow(
         MainViewModel viewModel,
         LiveViewPage liveViewPage,
         SettingsPage settingsPage,
-        GalleryPage galleryPage)
+        GalleryPage galleryPage,
+        DetectionSettingsWindow detectionSettingsWindow)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -27,15 +29,18 @@ public partial class MainWindow : Window
         }
         catch { /* non-fatal — app still runs without custom icon */ }
 
-        _liveViewPage = liveViewPage;
-        _settingsPage = settingsPage;
-        _galleryPage  = galleryPage;
+        _liveViewPage            = liveViewPage;
+        _settingsPage            = settingsPage;
+        _galleryPage             = galleryPage;
+        _detectionSettingsWindow = detectionSettingsWindow;
 
         viewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainViewModel.CurrentPage))
                 UpdateContentArea(viewModel.CurrentPage);
         };
+
+        viewModel.OpenDetectionSettingsRequested += OpenDetectionSettings;
 
         UpdateContentArea(viewModel.CurrentPage);
     }
@@ -48,5 +53,12 @@ public partial class MainWindow : Window
             AppPage.Settings => _settingsPage,
             _ => _galleryPage
         };
+    }
+
+    private void OpenDetectionSettings()
+    {
+        _detectionSettingsWindow.Owner = this;
+        _detectionSettingsWindow.Show();
+        _detectionSettingsWindow.Activate();
     }
 }

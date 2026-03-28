@@ -72,8 +72,13 @@ public partial class MainViewModel : ViewModelBase
         });
     }
 
+    public event Action? OpenDetectionSettingsRequested;
+
     [RelayCommand]
     private void NavigateTo(AppPage page) => CurrentPage = page;
+
+    [RelayCommand]
+    private void OpenDetectionSettings() => OpenDetectionSettingsRequested?.Invoke();
 
     [RelayCommand]
     private async Task CheckForUpdate()
