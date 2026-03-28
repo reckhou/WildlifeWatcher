@@ -152,41 +152,52 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         LoadSettings();
     }
 
+    private bool _loadingSettings;
+
     private void LoadSettings()
     {
-        var s = _settings.CurrentSettings;
-        CooldownSeconds              = s.CooldownSeconds;
-        SpeciesCooldownMinutes       = s.SpeciesCooldownMinutes;
-        FrameIntervalSeconds         = s.FrameExtractionIntervalSeconds;
-        MinConfidenceThreshold       = s.MinConfidenceThreshold;
-        MotionBackgroundAlpha        = s.MotionBackgroundAlpha;
-        MotionPixelThreshold         = s.MotionPixelThreshold;
-        MotionTemporalThreshold      = s.MotionTemporalThreshold;
-        MotionTemporalCellFraction   = s.MotionTemporalCellFraction;
-        EnablePoiExtraction          = s.EnablePoiExtraction;
-        SavePoiDebugImages           = s.SavePoiDebugImages;
-        PoiSensitivity               = s.PoiSensitivity;
-        AiProvider                   = s.AiProvider;
-        ClaudeModel                  = s.ClaudeModel;
-        GeminiModel                  = s.GeminiModel;
-        EnableDaylightDetectionOnly  = s.EnableDaylightDetectionOnly;
-        SunriseOffsetMinutes         = s.SunriseOffsetMinutes;
-        SunsetOffsetMinutes          = s.SunsetOffsetMinutes;
-
-        var creds = _credentials.LoadCredentials();
-        if (creds != null)
+        _loadingSettings = true;
+        try
         {
-            AnthropicApiKey = creds.AnthropicApiKey;
-            GeminiApiKey    = creds.GeminiApiKey;
-        }
+            var s = _settings.CurrentSettings;
+            CooldownSeconds              = s.CooldownSeconds;
+            SpeciesCooldownMinutes       = s.SpeciesCooldownMinutes;
+            FrameIntervalSeconds         = s.FrameExtractionIntervalSeconds;
+            MinConfidenceThreshold       = s.MinConfidenceThreshold;
+            MotionBackgroundAlpha        = s.MotionBackgroundAlpha;
+            MotionPixelThreshold         = s.MotionPixelThreshold;
+            MotionTemporalThreshold      = s.MotionTemporalThreshold;
+            MotionTemporalCellFraction   = s.MotionTemporalCellFraction;
+            EnablePoiExtraction          = s.EnablePoiExtraction;
+            SavePoiDebugImages           = s.SavePoiDebugImages;
+            PoiSensitivity               = s.PoiSensitivity;
+            AiProvider                   = s.AiProvider;
+            ClaudeModel                  = s.ClaudeModel;
+            GeminiModel                  = s.GeminiModel;
+            EnableDaylightDetectionOnly  = s.EnableDaylightDetectionOnly;
+            SunriseOffsetMinutes         = s.SunriseOffsetMinutes;
+            SunsetOffsetMinutes          = s.SunsetOffsetMinutes;
 
-        RefreshZoneItems();
+            var creds = _credentials.LoadCredentials();
+            if (creds != null)
+            {
+                AnthropicApiKey = creds.AnthropicApiKey;
+                GeminiApiKey    = creds.GeminiApiKey;
+            }
+
+            RefreshZoneItems();
+        }
+        finally
+        {
+            _loadingSettings = false;
+        }
     }
 
     // ── Auto-save ──────────────────────────────────────────────────────────
 
     private void AutoSave()
     {
+        if (_loadingSettings) return;
         var s = _settings.CurrentSettings;
         s.CooldownSeconds                = CooldownSeconds;
         s.SpeciesCooldownMinutes         = SpeciesCooldownMinutes;
