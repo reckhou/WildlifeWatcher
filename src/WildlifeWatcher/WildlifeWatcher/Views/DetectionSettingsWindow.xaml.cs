@@ -23,6 +23,8 @@ public partial class DetectionSettingsWindow : Window
         // Pre-populate from loaded credentials
         ApiKeyBox.Password       = viewModel.AnthropicApiKey;
         GeminiApiKeyBox.Password = viewModel.GeminiApiKey;
+
+        Loaded += async (_, _) => await viewModel.AutoCaptureZoneBackgroundAsync();
     }
 
     // Hide instead of close so the window can be re-opened without re-creating

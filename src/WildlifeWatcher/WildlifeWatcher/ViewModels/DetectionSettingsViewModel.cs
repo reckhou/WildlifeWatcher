@@ -177,6 +177,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             EnableDaylightDetectionOnly  = s.EnableDaylightDetectionOnly;
             SunriseOffsetMinutes         = s.SunriseOffsetMinutes;
             SunsetOffsetMinutes          = s.SunsetOffsetMinutes;
+            ContinuousTestIntervalSeconds = s.PoiTestIntervalSeconds;
 
             var creds = _credentials.LoadCredentials();
             if (creds != null)
@@ -216,6 +217,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         s.EnableDaylightDetectionOnly    = EnableDaylightDetectionOnly;
         s.SunriseOffsetMinutes           = SunriseOffsetMinutes;
         s.SunsetOffsetMinutes            = SunsetOffsetMinutes;
+        s.PoiTestIntervalSeconds         = ContinuousTestIntervalSeconds;
         s.MotionWhitelistZones           = new List<MotionZone>(MotionZones.Select(z => z.ToMotionZone()));
         _settings.Save(s);
     }
@@ -274,10 +276,17 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         finally { IsCapturingZoneBackground = false; }
     }
 
+    public async Task AutoCaptureZoneBackgroundAsync()
+    {
+        if (_camera.IsConnected)
+            await CaptureZoneBackgroundAsync();
+    }
+
     partial void OnContinuousTestIntervalSecondsChanged(int value)
     {
         if (value < 1)  ContinuousTestIntervalSeconds = 1;
         else if (value > 30) ContinuousTestIntervalSeconds = 30;
+        else AutoSave();
     }
 
     // ── Test POI commands ─────────────────────────────────────────────────

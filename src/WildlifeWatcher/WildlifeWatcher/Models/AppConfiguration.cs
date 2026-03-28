@@ -101,6 +101,12 @@ public class AppConfiguration
     /// </summary>
     public int SunsetOffsetMinutes { get; set; } = 30;
 
+    /// <summary>
+    /// Interval in seconds between automatic POI test cycles when continuous testing is active.
+    /// Range: 1–30. Default: 5.
+    /// </summary>
+    public int PoiTestIntervalSeconds { get; set; } = 5;
+
     public string GetEffectiveDatabasePath() =>
         string.IsNullOrWhiteSpace(DatabasePath)
             ? Path.Combine(Environment.GetFolderPath(
