@@ -57,6 +57,10 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     [ObservableProperty] private bool    _isCapturingZoneBackground;
     public ObservableCollection<MotionZoneItem> MotionZones { get; } = new();
 
+    // ── Display ────────────────────────────────────────────────────────────
+
+    [ObservableProperty] private double _uiScale = 1.0;
+
     // ── Test POI ───────────────────────────────────────────────────────────
 
     [ObservableProperty] private string _testPoiStatus              = string.Empty;
@@ -150,6 +154,9 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         _recognitionLoop = recognitionLoop;
 
         LoadSettings();
+
+        _settings.SettingsChanged += (_, s) =>
+            Application.Current.Dispatcher.Invoke(() => UiScale = s.UiScale);
     }
 
     private bool _loadingSettings;
@@ -178,6 +185,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             SunriseOffsetMinutes         = s.SunriseOffsetMinutes;
             SunsetOffsetMinutes          = s.SunsetOffsetMinutes;
             ContinuousTestIntervalSeconds = s.PoiTestIntervalSeconds;
+            UiScale                      = s.UiScale;
 
             var creds = _credentials.LoadCredentials();
             if (creds != null)

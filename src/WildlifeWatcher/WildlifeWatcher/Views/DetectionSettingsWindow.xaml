@@ -34,6 +34,9 @@
     </Window.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <ScrollViewer.LayoutTransform>
+            <ScaleTransform ScaleX="{Binding UiScale}" ScaleY="{Binding UiScale}"/>
+        </ScrollViewer.LayoutTransform>
         <StackPanel Margin="24,16" MaxWidth="580">
 
             <TextBlock Text="Detection Settings" FontSize="22" FontWeight="Bold"

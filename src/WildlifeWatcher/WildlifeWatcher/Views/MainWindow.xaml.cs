@@ -43,6 +43,15 @@ public partial class MainWindow : Window
         viewModel.OpenDetectionSettingsRequested += OpenDetectionSettings;
 
         UpdateContentArea(viewModel.CurrentPage);
+
+        Loaded += (_, _) =>
+        {
+            var work = SystemParameters.WorkArea;
+            MaxWidth  = work.Width;
+            MaxHeight = work.Height;
+            if (Width  > work.Width)  Width  = work.Width;
+            if (Height > work.Height) Height = work.Height;
+        };
     }
 
     private void UpdateContentArea(AppPage page)

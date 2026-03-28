@@ -55,6 +55,11 @@ public partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<GeocodingResult> LocationResults { get; } = new();
     public bool HasLocationResults => LocationResults.Count > 0;
 
+    // Display
+    public static IReadOnlyList<double> UiScaleOptions { get; } =
+        Enumerable.Range(8, 13).Select(i => i / 10.0).ToList();
+    [ObservableProperty] private double _uiScale = 1.0;
+
     [ObservableProperty] private string _saveStatus = string.Empty;
 
     // Export / Import
@@ -110,6 +115,7 @@ public partial class SettingsViewModel : ViewModelBase
 
         _savedCapturesDirectory = s.CapturesDirectory;
         _savedDatabasePath      = s.DatabasePath;
+        UiScale                 = s.UiScale;
 
         var creds = _credentialService.LoadCredentials();
         if (creds != null)
@@ -182,6 +188,7 @@ public partial class SettingsViewModel : ViewModelBase
         s.Longitude                  = _selectedLongitude;
         s.LocationName               = LocationName;
         s.DebugForceUpdateAvailable  = _debugForceUpdateAvailable;
+        s.UiScale                    = UiScale;
         _settingsService.Save(s);
 
         // Preserve API keys — they are owned by DetectionSettingsViewModel

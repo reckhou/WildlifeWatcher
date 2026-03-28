@@ -192,6 +192,19 @@
                     Cursor="Hand" FontSize="12" Margin="0,4,0,0"
                     HorizontalAlignment="Left"/>
 
+            <!-- ═══ Display ═══ -->
+            <TextBlock Text="Display" Style="{StaticResource SectionHeader}"/>
+            <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
+
+            <TextBlock Text="UI scale" Style="{StaticResource Label}"/>
+            <TextBlock Text="Scales the interface independently of Windows display scaling. Takes effect after clicking Save Settings."
+                       Style="{StaticResource Hint}"/>
+            <ComboBox ItemsSource="{Binding UiScaleOptions}"
+                      SelectedItem="{Binding UiScale}"
+                      ItemStringFormat="{}{0:0%}"
+                      Width="100" HorizontalAlignment="Left"
+                      Padding="6,4" FontSize="12"/>
+
             <!-- ═══ Updates ═══ -->
             <TextBlock Text="Updates" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>

@@ -24,7 +24,13 @@ public partial class DetectionSettingsWindow : Window
         ApiKeyBox.Password       = viewModel.AnthropicApiKey;
         GeminiApiKeyBox.Password = viewModel.GeminiApiKey;
 
-        Loaded += async (_, _) => await viewModel.AutoCaptureZoneBackgroundAsync();
+        Loaded += async (_, _) =>
+        {
+            var maxH = SystemParameters.WorkArea.Height - 40;
+            MaxHeight = maxH;
+            if (Height > maxH) Height = maxH;
+            await viewModel.AutoCaptureZoneBackgroundAsync();
+        };
     }
 
     // Hide instead of close so the window can be re-opened without re-creating

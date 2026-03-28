@@ -21,6 +21,7 @@ public partial class MainViewModel : ViewModelBase
     private UpdateInfo? _pendingUpdate;
 
     [ObservableProperty] private AppPage _currentPage = AppPage.LiveView;
+    [ObservableProperty] private double  _uiScale     = 1.0;
     [ObservableProperty] private string  _statusText  = "Ready";
     [ObservableProperty] private bool    _isConnected;
     [ObservableProperty] private bool    _isUpdateAvailable;
@@ -35,11 +36,16 @@ public partial class MainViewModel : ViewModelBase
         IRecognitionLoopService recognitionLoop,
         ICaptureStorageService  captureStorage,
         IUpdateService          updateService,
+        ISettingsService        settings,
         ILogger<MainViewModel>  logger)
     {
         _recognitionLoop = recognitionLoop;
         _updateService   = updateService;
         _logger          = logger;
+
+        UiScale = settings.CurrentSettings.UiScale;
+        settings.SettingsChanged += (_, s) =>
+            Application.Current.Dispatcher.Invoke(() => UiScale = s.UiScale);
 
         _statusClearTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _statusClearTimer.Tick += (_, _) => { StatusText = "Ready"; _statusClearTimer.Stop(); };

@@ -102,6 +102,12 @@ public class AppConfiguration
     public int SunsetOffsetMinutes { get; set; } = 30;
 
     /// <summary>
+    /// UI scale multiplier applied independently of the Windows display scale setting.
+    /// Range: 0.8–2.0. Default: 1.0.
+    /// </summary>
+    public double UiScale { get; set; } = 1.0;
+
+    /// <summary>
     /// Interval in seconds between automatic POI test cycles when continuous testing is active.
     /// Range: 1–30. Default: 5.
     /// </summary>
