@@ -148,14 +148,16 @@ public partial class App : Application
                         services.AddSingleton<LiveViewModel>();
                         services.AddSingleton<SettingsViewModel>();
                         services.AddSingleton<GalleryViewModel>();
+                        services.AddSingleton<DetectionSettingsViewModel>();
 
                         // Pages (singletons — VideoView must not be recreated)
                         services.AddSingleton<LiveViewPage>();
                         services.AddSingleton<SettingsPage>();
                         services.AddSingleton<GalleryPage>();
 
-                        // Main window
+                        // Windows
                         services.AddSingleton<MainWindow>();
+                        services.AddSingleton<DetectionSettingsWindow>();
                     })
                     .Build();
 
