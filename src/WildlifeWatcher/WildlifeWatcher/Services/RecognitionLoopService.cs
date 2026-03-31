@@ -439,17 +439,26 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         if (!_camera.IsConnected)
             return "Camera not connected.";
 
-        var frame = await _camera.ExtractFrameAsync();
-        if (frame == null)
-            return "Failed to extract frame.";
+        // Take two frames with a brief delay so the temporal delta has real data.
+        // A single frame always produces zero temporal motion → 0 regions.
+        var firstFrame = await _camera.ExtractFrameAsync();
+        if (firstFrame == null)
+            return "Failed to extract first frame.";
 
         var settings = _settings.CurrentSettings;
+        EnsureInitialized(firstFrame);
 
-        EnsureInitialized(frame);
-
-        var (fg, temporalDelta, _) = _background.ComputeForeground(frame, null);
+        var (_, _, previousGray) = _background.ComputeForeground(firstFrame, null);
         if (_background.FrameCount == 0)
             return "Background model not ready yet (first frame).";
+
+        await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(settings.BackgroundUpdateIntervalSeconds, 1, 5)));
+
+        var frame = await _camera.ExtractFrameAsync();
+        if (frame == null)
+            return "Failed to extract second frame.";
+
+        var (fg, temporalDelta, _) = _background.ComputeForeground(frame, previousGray);
 
         var zones = settings.MotionWhitelistZones.Count > 0
             ? (IReadOnlyList<MotionZone>)settings.MotionWhitelistZones : null;

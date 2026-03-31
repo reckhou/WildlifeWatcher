@@ -328,7 +328,7 @@ public partial class LiveViewModel : ViewModelBase
     private string ComputeTimeLeftText()
     {
         int framesLeft = Math.Max(0, _backgroundModel.TrainingFramesNeeded - _backgroundModel.FrameCount);
-        int secsLeft   = framesLeft * _settings.CurrentSettings.FrameExtractionIntervalSeconds;
+        int secsLeft   = framesLeft * _settings.CurrentSettings.BackgroundUpdateIntervalSeconds;
         if (secsLeft <= 0) return string.Empty;
         return secsLeft >= 60 ? $"~{secsLeft / 60} min left" : $"~{secsLeft}s left";
     }

@@ -92,9 +92,9 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         get
         {
             int frames  = (int)Math.Ceiling(Math.Log(0.05) / Math.Log(1 - MotionBackgroundAlpha));
-            int seconds = frames * FrameIntervalSeconds;
+            int seconds = frames * BackgroundUpdateIntervalSeconds;
             int minutes = seconds / 60;
-            return $"At α={MotionBackgroundAlpha:F2} with {FrameIntervalSeconds}s interval: " +
+            return $"At α={MotionBackgroundAlpha:F2} with {BackgroundUpdateIntervalSeconds}s interval: " +
                    $"training completes in ~{minutes} min ({frames} frames). " +
                    (MotionBackgroundAlpha <= 0.05
                        ? "Slow adapt — better for persistent subjects, longer noise suppression."
@@ -158,7 +158,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     partial void OnEnableBurstCaptureChanged(bool value)       { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
     partial void OnBurstFrameCountChanged(int value)           { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
     partial void OnBurstIntervalMsChanged(int value)           { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
-    partial void OnBackgroundUpdateIntervalSecondsChanged(int value) => AutoSave();
+    partial void OnBackgroundUpdateIntervalSecondsChanged(int value) { OnPropertyChanged(nameof(AlphaAdvice)); AutoSave(); }
     partial void OnEnableDaylightDetectionOnlyChanged(bool value) { OnPropertyChanged(nameof(ShowDaylightLocationWarning)); AutoSave(); }
 
     partial void OnCooldownSecondsChanged(int value)              => AutoSave();
