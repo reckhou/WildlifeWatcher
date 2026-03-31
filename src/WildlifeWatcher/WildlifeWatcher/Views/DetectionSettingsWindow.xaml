@@ -122,6 +122,15 @@
                        FontSize="10" Foreground="#888" TextWrapping="Wrap"
                        Margin="0,2,0,6"/>
 
+            <TextBlock Text="Max POI regions per frame (3–10)" Style="{StaticResource Label}"/>
+            <Slider Value="{Binding MaxPoiRegions}"
+                    Minimum="3" Maximum="10"
+                    TickFrequency="1" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding MaxPoiRegions, StringFormat={}{0} regions}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+
             <!-- ═══ Grid Resolution ═══ -->
             <TextBlock Text="Grid Resolution" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>

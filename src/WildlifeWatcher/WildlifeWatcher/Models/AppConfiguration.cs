@@ -81,6 +81,9 @@ public class AppConfiguration
     /// </summary>
     public int PoiCellSizePixels { get; set; } = 40;
 
+    /// <summary>Maximum number of POI regions sent to the AI per frame. Range: 3–10. Default: 5.</summary>
+    public int MaxPoiRegions { get; set; } = 5;
+
     /// <summary>Enable multi-frame burst capture after initial POI detection.</summary>
     public bool EnableBurstCapture { get; set; } = true;
 

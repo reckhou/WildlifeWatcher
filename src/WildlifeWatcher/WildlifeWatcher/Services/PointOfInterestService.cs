@@ -23,7 +23,8 @@ public class PointOfInterestService : IPointOfInterestService
     private const double MaxBlobFraction  = 0.20; // skip tight bbox larger than 20% of frame in either dimension
     private const double MaxCropFraction  = 0.25; // clamp padded crop to 25% of frame in either dimension
     private const int    CropMaxDimension = 640;  // max side length of the crop sent to AI
-    private const int    MaxRegions       = 5;    // cap to avoid sending too many images
+    private const int    MinCropDimension = 128;  // min side length of the crop in full-res pixels
+    private const int    DefaultMaxRegions = 5;    // default cap; overridable via settings
 
     /// <summary>
     /// Compute grid dimensions and downscale resolution for a given camera resolution and cell size.
@@ -50,7 +51,8 @@ public class PointOfInterestService : IPointOfInterestService
                                                      double poiSensitivity = 0.5,
                                                      float[]? temporalDelta = null,
                                                      int temporalThreshold = 8,
-                                                     double temporalCellFraction = 0.10)
+                                                     double temporalCellFraction = 0.10,
+                                                     int maxRegions = 5)
     {
         if (_gridCols == 0 || _gridRows == 0)
             return Array.Empty<PoiRegion>();
@@ -144,8 +146,9 @@ public class PointOfInterestService : IPointOfInterestService
 
         // Sort by size descending, take top N
         components.Sort((a, b) => b.Count.CompareTo(a.Count));
-        if (components.Count > MaxRegions)
-            components.RemoveRange(MaxRegions, components.Count - MaxRegions);
+        int cap = Math.Clamp(maxRegions, 3, 10);
+        if (components.Count > cap)
+            components.RemoveRange(cap, components.Count - cap);
 
         // ── 3. Decode full-res frame once (SkiaSharp — no UI thread needed) ──
         using var fullRes = SKBitmap.Decode(currentFrame);
@@ -206,6 +209,24 @@ public class PointOfInterestService : IPointOfInterestService
 
         int cropW = cx2 - cx1;
         int cropH = cy2 - cy1;
+
+        // Enforce minimum crop size, extending from tight bbox centre
+        double blobCenterX = (x1 + x2) / 2.0;
+        double blobCenterY = (y1 + y2) / 2.0;
+        if (cropW < MinCropDimension)
+        {
+            cx1   = (int)Math.Max(0,    blobCenterX - MinCropDimension / 2.0);
+            cx2   = Math.Min(imgW, cx1 + MinCropDimension);
+            cx1   = Math.Max(0, cx2 - MinCropDimension); // re-adjust if clamped at right edge
+            cropW = cx2 - cx1;
+        }
+        if (cropH < MinCropDimension)
+        {
+            cy1   = (int)Math.Max(0,    blobCenterY - MinCropDimension / 2.0);
+            cy2   = Math.Min(imgH, cy1 + MinCropDimension);
+            cy1   = Math.Max(0, cy2 - MinCropDimension); // re-adjust if clamped at bottom edge
+            cropH = cy2 - cy1;
+        }
         if (cropW < 20 || cropH < 20) return null;
 
         // Skip blobs whose tight bounding box is too large to be a single bird
@@ -218,15 +239,13 @@ public class PointOfInterestService : IPointOfInterestService
         int maxCropH = (int)(imgH * MaxCropFraction);
         if (cropW > maxCropW)
         {
-            double blobCx = (x1 + x2) / 2.0;
-            cx1   = (int)Math.Max(0,    blobCx - maxCropW / 2.0);
+            cx1   = (int)Math.Max(0,    blobCenterX - maxCropW / 2.0);
             cx2   = Math.Min(imgW, cx1 + maxCropW);
             cropW = cx2 - cx1;
         }
         if (cropH > maxCropH)
         {
-            double blobCy = (y1 + y2) / 2.0;
-            cy1   = (int)Math.Max(0,    blobCy - maxCropH / 2.0);
+            cy1   = (int)Math.Max(0,    blobCenterY - maxCropH / 2.0);
             cy2   = Math.Min(imgH, cy1 + maxCropH);
             cropH = cy2 - cy1;
         }
@@ -317,7 +336,7 @@ public class PointOfInterestService : IPointOfInterestService
     /// hit count, runs BFS, returns grid-space bounding boxes with peak intensity.
     /// </summary>
     public IReadOnlyList<(int minRow, int maxRow, int minCol, int maxCol, float peakIntensity)>
-        ExtractHeatmapRegions(float[,] heatmap, int minHitCount, double poiSensitivity)
+        ExtractHeatmapRegions(float[,] heatmap, int minHitCount, double poiSensitivity, int maxRegions = 5)
     {
         int minCellCount = poiSensitivity >= 0.8 ? 1 : poiSensitivity >= 0.4 ? 2 : 3;
         bool use8Neighbor = poiSensitivity >= 0.3;
@@ -392,8 +411,9 @@ public class PointOfInterestService : IPointOfInterestService
         }
 
         results.Sort((a, b) => b.Item5.CompareTo(a.Item5));
-        if (results.Count > MaxRegions)
-            results.RemoveRange(MaxRegions, results.Count - MaxRegions);
+        int cap = Math.Clamp(maxRegions, 3, 10);
+        if (results.Count > cap)
+            results.RemoveRange(cap, results.Count - cap);
 
         return results;
     }

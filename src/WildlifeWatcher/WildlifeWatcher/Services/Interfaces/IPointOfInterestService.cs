@@ -22,5 +22,6 @@ public interface IPointOfInterestService
                                              double poiSensitivity = 0.5,
                                              float[]? temporalDelta = null,
                                              int temporalThreshold = 8,
-                                             double temporalCellFraction = 0.10);
+                                             double temporalCellFraction = 0.10,
+                                             int maxRegions = 5);
 }

@@ -243,7 +243,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         if (settings.EnablePoiExtraction)
         {
             poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold, settings.PoiSensitivity,
-                temporalDelta, settings.MotionTemporalThreshold, settings.MotionTemporalCellFraction);
+                temporalDelta, settings.MotionTemporalThreshold, settings.MotionTemporalCellFraction, settings.MaxPoiRegions);
             _logger.LogInformation("POI extraction: {Count} region(s) found", poiRegions.Count);
 
             if (poiRegions.Count == 0)
@@ -381,7 +381,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             return (Array.Empty<PoiRegion>(), null);
 
         // Extract heatmap regions
-        var heatmapRegions = poiSvc.ExtractHeatmapRegions(heatmap, minHitCount: 2, settings.PoiSensitivity);
+        var heatmapRegions = poiSvc.ExtractHeatmapRegions(heatmap, minHitCount: 2, settings.PoiSensitivity, settings.MaxPoiRegions);
         _logger.LogInformation("Burst complete: {Count} heatmap region(s) from {Frames} frames",
             heatmapRegions.Count, burstFrames.Count);
 
@@ -468,7 +468,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         {
             regions = _poi.ExtractRegions(fg, frame, zones, settings.MotionPixelThreshold,
                 settings.PoiSensitivity, temporalDelta, settings.MotionTemporalThreshold,
-                settings.MotionTemporalCellFraction);
+                settings.MotionTemporalCellFraction, settings.MaxPoiRegions);
             _logger.LogInformation("Test POI extraction: {Count} region(s) found", regions.Count);
 
             // Run burst if enabled and initial POI found regions

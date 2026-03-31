@@ -9,20 +9,32 @@ namespace WildlifeWatcher.Views;
 
 public partial class DetectionSettingsWindow : Window
 {
+    private bool _populatingPasswords;
+
     public DetectionSettingsWindow(DetectionSettingsViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
 
-        // PasswordBox doesn't support data binding — wire manually
+        // PasswordBox doesn't support data binding — wire manually.
+        // Guard with _populatingPasswords so the initial population doesn't
+        // fire saves (which would overwrite one key with empty string).
         ApiKeyBox.PasswordChanged += (_, _) =>
-            viewModel.SaveApiCredentials(ApiKeyBox.Password, GeminiApiKeyBox.Password);
+        {
+            if (!_populatingPasswords)
+                viewModel.SaveApiCredentials(ApiKeyBox.Password, GeminiApiKeyBox.Password);
+        };
         GeminiApiKeyBox.PasswordChanged += (_, _) =>
-            viewModel.SaveApiCredentials(ApiKeyBox.Password, GeminiApiKeyBox.Password);
+        {
+            if (!_populatingPasswords)
+                viewModel.SaveApiCredentials(ApiKeyBox.Password, GeminiApiKeyBox.Password);
+        };
 
         // Pre-populate from loaded credentials
+        _populatingPasswords = true;
         ApiKeyBox.Password       = viewModel.AnthropicApiKey;
         GeminiApiKeyBox.Password = viewModel.GeminiApiKey;
+        _populatingPasswords = false;
 
         Loaded += async (_, _) =>
         {

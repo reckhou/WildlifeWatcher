@@ -34,6 +34,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     [ObservableProperty] private bool   _enablePoiExtraction = true;
     [ObservableProperty] private bool   _savePoiDebugImages  = true;
     [ObservableProperty] private double _poiSensitivity      = 0.5;
+    [ObservableProperty] private int    _maxPoiRegions       = 5;
 
     // ── Grid Resolution ──────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     partial void OnMotionPixelThresholdChanged(int value)      { OnPropertyChanged(nameof(PixelThresholdAdvice)); AutoSave(); }
     partial void OnMotionTemporalThresholdChanged(int value)   { OnPropertyChanged(nameof(TemporalThresholdAdvice)); AutoSave(); }
     partial void OnPoiSensitivityChanged(double value)         { OnPropertyChanged(nameof(PoiSensitivityAdvice)); AutoSave(); }
+    partial void OnMaxPoiRegionsChanged(int value)             => AutoSave();
     partial void OnPoiCellSizePixelsChanged(int value)         { OnPropertyChanged(nameof(GridPresetAdvice)); AutoSave(); }
     partial void OnEnableBurstCaptureChanged(bool value)       { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
     partial void OnBurstFrameCountChanged(int value)           { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
@@ -211,6 +213,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             EnablePoiExtraction          = s.EnablePoiExtraction;
             SavePoiDebugImages           = s.SavePoiDebugImages;
             PoiSensitivity               = s.PoiSensitivity;
+            MaxPoiRegions                = s.MaxPoiRegions;
             PoiCellSizePixels            = s.PoiCellSizePixels;
             EnableBurstCapture           = s.EnableBurstCapture;
             BurstFrameCount              = s.BurstFrameCount;
@@ -257,6 +260,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         s.EnablePoiExtraction            = EnablePoiExtraction;
         s.SavePoiDebugImages             = SavePoiDebugImages;
         s.PoiSensitivity                 = PoiSensitivity;
+        s.MaxPoiRegions                  = MaxPoiRegions;
         s.PoiCellSizePixels              = PoiCellSizePixels;
         s.EnableBurstCapture             = EnableBurstCapture;
         s.BurstFrameCount                = BurstFrameCount;
