@@ -281,7 +281,7 @@
                                             </Border.InputBindings>
                                             <StackPanel>
                                                 <Image Height="100" Stretch="UniformToFill"
-                                                       Source="{Binding FramePng, Converter={StaticResource BytesToBitmapConverter}}"
+                                                       Source="{Binding ThumbnailBytes, Converter={StaticResource BytesToBitmapConverter}}"
                                                        Margin="0,0,0,6"/>
                                                 <TextBlock Text="{Binding Result.CommonName}"
                                                            Foreground="White" FontWeight="Bold" FontSize="12"

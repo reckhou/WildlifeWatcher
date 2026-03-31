@@ -35,6 +35,17 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     [ObservableProperty] private bool   _savePoiDebugImages  = true;
     [ObservableProperty] private double _poiSensitivity      = 0.5;
 
+    // ── Grid Resolution ──────────────────────────────────────────────────
+
+    [ObservableProperty] private int _poiCellSizePixels = 40;
+
+    // ── Burst Mode ───────────────────────────────────────────────────────
+
+    [ObservableProperty] private bool _enableBurstCapture = true;
+    [ObservableProperty] private int  _burstFrameCount = 10;
+    [ObservableProperty] private int  _burstIntervalMs = 1000;
+    [ObservableProperty] private int  _backgroundUpdateIntervalSeconds = 2;
+
     // ── AI ─────────────────────────────────────────────────────────────────
 
     [ObservableProperty] private AiProvider _aiProvider  = AiProvider.Claude;
@@ -100,6 +111,23 @@ public partial class DetectionSettingsViewModel : ViewModelBase
                     ? "Sensitive — detects smaller birds (goldfinches, sparrows); may increase false positives"
                     : "Very sensitive — single-cell detection enabled; best for small/distant subjects but expect more noise";
 
+    public string BurstAdvice =>
+        EnableBurstCapture
+            ? $"Burst: {BurstFrameCount} frames over {BurstFrameCount * BurstIntervalMs / 1000.0:F1}s. " +
+              $"Auto-test floor: {BurstFrameCount * BurstIntervalMs / 1000 + 2}s."
+            : "Burst disabled — single-frame POI only.";
+
+    public string GridPresetAdvice
+    {
+        get
+        {
+            var preset = PoiCellSizePresets.All.FirstOrDefault(p => p.Size == PoiCellSizePixels);
+            var name = preset.Name ?? $"Custom ({PoiCellSizePixels}px)";
+            var desc = preset.Description ?? "";
+            return $"{name} — {desc}";
+        }
+    }
+
     public string PixelThresholdAdvice =>
         MotionPixelThreshold < 15
             ? $"Warning: {MotionPixelThreshold} is below the noise floor — expect false triggers from camera noise and JPEG artifacts. Recommended: 20–30."
@@ -126,6 +154,11 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     partial void OnMotionPixelThresholdChanged(int value)      { OnPropertyChanged(nameof(PixelThresholdAdvice)); AutoSave(); }
     partial void OnMotionTemporalThresholdChanged(int value)   { OnPropertyChanged(nameof(TemporalThresholdAdvice)); AutoSave(); }
     partial void OnPoiSensitivityChanged(double value)         { OnPropertyChanged(nameof(PoiSensitivityAdvice)); AutoSave(); }
+    partial void OnPoiCellSizePixelsChanged(int value)         { OnPropertyChanged(nameof(GridPresetAdvice)); AutoSave(); }
+    partial void OnEnableBurstCaptureChanged(bool value)       { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
+    partial void OnBurstFrameCountChanged(int value)           { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
+    partial void OnBurstIntervalMsChanged(int value)           { OnPropertyChanged(nameof(BurstAdvice)); ClampContinuousTestInterval(); AutoSave(); }
+    partial void OnBackgroundUpdateIntervalSecondsChanged(int value) => AutoSave();
     partial void OnEnableDaylightDetectionOnlyChanged(bool value) { OnPropertyChanged(nameof(ShowDaylightLocationWarning)); AutoSave(); }
 
     partial void OnCooldownSecondsChanged(int value)              => AutoSave();
@@ -178,6 +211,11 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             EnablePoiExtraction          = s.EnablePoiExtraction;
             SavePoiDebugImages           = s.SavePoiDebugImages;
             PoiSensitivity               = s.PoiSensitivity;
+            PoiCellSizePixels            = s.PoiCellSizePixels;
+            EnableBurstCapture           = s.EnableBurstCapture;
+            BurstFrameCount              = s.BurstFrameCount;
+            BurstIntervalMs              = s.BurstIntervalMs;
+            BackgroundUpdateIntervalSeconds = s.BackgroundUpdateIntervalSeconds;
             AiProvider                   = s.AiProvider;
             ClaudeModel                  = s.ClaudeModel;
             GeminiModel                  = s.GeminiModel;
@@ -219,6 +257,11 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         s.EnablePoiExtraction            = EnablePoiExtraction;
         s.SavePoiDebugImages             = SavePoiDebugImages;
         s.PoiSensitivity                 = PoiSensitivity;
+        s.PoiCellSizePixels              = PoiCellSizePixels;
+        s.EnableBurstCapture             = EnableBurstCapture;
+        s.BurstFrameCount                = BurstFrameCount;
+        s.BurstIntervalMs                = BurstIntervalMs;
+        s.BackgroundUpdateIntervalSeconds = BackgroundUpdateIntervalSeconds;
         s.AiProvider                     = AiProvider;
         s.ClaudeModel                    = ClaudeModel;
         s.GeminiModel                    = GeminiModel;
@@ -295,6 +338,15 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         if (value < 1)  ContinuousTestIntervalSeconds = 1;
         else if (value > 30) ContinuousTestIntervalSeconds = 30;
         else AutoSave();
+    }
+
+    private void ClampContinuousTestInterval()
+    {
+        if (!EnableBurstCapture) return;
+        int burstDurationSec = (int)Math.Ceiling(BurstFrameCount * BurstIntervalMs / 1000.0);
+        int floor = burstDurationSec + 2;
+        if (ContinuousTestIntervalSeconds < floor)
+            ContinuousTestIntervalSeconds = floor;
     }
 
     // ── Test POI commands ─────────────────────────────────────────────────

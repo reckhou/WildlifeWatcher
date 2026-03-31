@@ -150,7 +150,7 @@ public class CaptureStorageService : ICaptureStorageService
         };
 
         // Store source POI bounding box for zoomed thumbnail display
-        if (result.SourcePoiIndex.HasValue && poiRegions != null)
+        if (result.SourcePoiIndex.HasValue && poiRegions is { Count: > 0 })
         {
             var srcPoi = poiRegions.FirstOrDefault(p => p.Index == result.SourcePoiIndex.Value);
             if (srcPoi != null)
@@ -160,6 +160,24 @@ public class CaptureStorageService : ICaptureStorageService
                 record.PoiNWidth  = srcPoi.NWidth;
                 record.PoiNHeight = srcPoi.NHeight;
             }
+            else
+            {
+                _logger.LogWarning(
+                    "source_crop_index {Index} did not match any POI region (count={Count})",
+                    result.SourcePoiIndex.Value, poiRegions.Count);
+            }
+        }
+        else if (!result.SourcePoiIndex.HasValue && poiRegions is { Count: > 0 })
+        {
+            // AI omitted source_crop_index despite receiving crops — fall back to first region
+            _logger.LogWarning(
+                "AI omitted source_crop_index but {Count} POI region(s) were sent — falling back to region 1",
+                poiRegions.Count);
+            var fallback = poiRegions[0];
+            record.PoiNLeft   = fallback.NLeft;
+            record.PoiNTop    = fallback.NTop;
+            record.PoiNWidth  = fallback.NWidth;
+            record.PoiNHeight = fallback.NHeight;
         }
         db.CaptureRecords.Add(record);
         await db.SaveChangesAsync();

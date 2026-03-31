@@ -66,6 +66,30 @@ public class AppConfiguration
 
     public List<MotionZone> MotionWhitelistZones { get; set; } = new();
 
+    /// <summary>
+    /// How often the background model captures a frame and updates the EMA (seconds).
+    /// Independent of the detection interval. Lower = better background quality, faster training.
+    /// Range: 1–30. Default: 2.
+    /// </summary>
+    public int BackgroundUpdateIntervalSeconds { get; set; } = 2;
+
+    /// <summary>
+    /// Target cell size in real camera pixels. Controls POI grid granularity.
+    /// Smaller = finer grid = detects smaller animals, but more cells to process.
+    /// Presets: Ultra Fine (20), Very Fine (30), Fine (40), Standard (50),
+    /// Moderate (60), Coarse (70), Very Coarse (80). Default: Fine (40).
+    /// </summary>
+    public int PoiCellSizePixels { get; set; } = 40;
+
+    /// <summary>Enable multi-frame burst capture after initial POI detection.</summary>
+    public bool EnableBurstCapture { get; set; } = true;
+
+    /// <summary>Number of frames to capture during a burst. Range: 3–30. Default: 10.</summary>
+    public int BurstFrameCount { get; set; } = 10;
+
+    /// <summary>Milliseconds between burst frame captures. Range: 200–3000. Default: 1000.</summary>
+    public int BurstIntervalMs { get; set; } = 1000;
+
     public string DatabasePath { get; set; } = string.Empty;
 
     // Location for weather data (Phase 6)

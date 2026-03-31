@@ -33,7 +33,7 @@ public class RtspCameraService : ICameraService
         _logger = logger;
 
         Core.Initialize();
-        _libVlc = new LibVLC("--verbose=1");
+        _libVlc = new LibVLC("--verbose=1", "--no-osd");
 
         // Forward all LibVLC log messages into Serilog + rolling buffer
         _libVlc.Log += OnLibVlcLog;

@@ -10,11 +10,11 @@
 
 ## Progress
 
-- [ ] Task 1: EMA standalone refactor + dynamic resolution
-- [ ] Task 2: Dynamic grid resolution with presets
-- [ ] Task 3: Burst mode with heatmap accumulation
-- [ ] Task 4: Bug fixes (VLC OSD, recent captures, source_crop_index)
-- [ ] Task 5: Settings UI for burst mode and grid presets
+- [x] Task 1: EMA standalone refactor + dynamic resolution
+- [x] Task 2: Dynamic grid resolution with presets
+- [x] Task 3: Burst mode with heatmap accumulation
+- [x] Task 4: Bug fixes (VLC OSD, recent captures, source_crop_index)
+- [x] Task 5: Settings UI for burst mode and grid presets
 
 ---
 

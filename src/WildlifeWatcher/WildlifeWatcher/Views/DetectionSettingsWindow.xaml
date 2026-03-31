@@ -122,6 +122,65 @@
                        FontSize="10" Foreground="#888" TextWrapping="Wrap"
                        Margin="0,2,0,6"/>
 
+            <!-- ═══ Grid Resolution ═══ -->
+            <TextBlock Text="Grid Resolution" Style="{StaticResource SectionHeader}"/>
+            <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Cell size preset (smaller = finer grid, detects smaller animals)" Style="{StaticResource Label}"/>
+            <Slider Value="{Binding PoiCellSizePixels}"
+                    Minimum="20" Maximum="80"
+                    TickFrequency="10" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding PoiCellSizePixels, StringFormat={}{0}px}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+            <TextBlock Text="{Binding GridPresetAdvice}"
+                       FontSize="10" Foreground="#888" TextWrapping="Wrap"
+                       Margin="0,2,0,6"/>
+
+            <!-- ═══ Burst Capture ═══ -->
+            <TextBlock Text="Burst Capture" Style="{StaticResource SectionHeader}"/>
+            <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
+
+            <CheckBox Content="Enable multi-frame burst capture after initial POI detection"
+                      IsChecked="{Binding EnableBurstCapture}"
+                      FontSize="12" Foreground="#444" Margin="0,4,0,4"/>
+
+            <TextBlock Text="Burst frame count (3–30)" Style="{StaticResource Label}"/>
+            <Slider Value="{Binding BurstFrameCount}"
+                    Minimum="3" Maximum="30"
+                    TickFrequency="1" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    IsEnabled="{Binding EnableBurstCapture}"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding BurstFrameCount, StringFormat={}{0} frames}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+
+            <TextBlock Text="Burst interval (200–3000 ms)" Style="{StaticResource Label}"/>
+            <Slider Value="{Binding BurstIntervalMs}"
+                    Minimum="200" Maximum="3000"
+                    TickFrequency="100" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    IsEnabled="{Binding EnableBurstCapture}"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding BurstIntervalMs, StringFormat={}{0} ms}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+
+            <TextBlock Text="{Binding BurstAdvice}"
+                       FontSize="10" Foreground="#888" TextWrapping="Wrap"
+                       Margin="0,2,0,6"/>
+
+            <TextBlock Text="Background update interval (1–30 s)" Style="{StaticResource Label}"/>
+            <TextBlock Text="How often the background model updates independently of detection. Lower = faster training."
+                       Style="{StaticResource Hint}"/>
+            <Slider Value="{Binding BackgroundUpdateIntervalSeconds}"
+                    Minimum="1" Maximum="30"
+                    TickFrequency="1" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding BackgroundUpdateIntervalSeconds, StringFormat={}{0}s}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+
             <!-- ═══ Capture ═══ -->
             <TextBlock Text="Capture" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>

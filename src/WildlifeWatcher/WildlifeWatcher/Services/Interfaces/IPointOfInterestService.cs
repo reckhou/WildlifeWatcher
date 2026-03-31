@@ -5,6 +5,11 @@ namespace WildlifeWatcher.Services.Interfaces;
 public interface IPointOfInterestService
 {
     /// <summary>
+    /// Set the grid dimensions. Must be called before ExtractRegions.
+    /// </summary>
+    void Initialize(int gridCols, int gridRows);
+
+    /// <summary>
     /// Uses the foreground mask from the background model to find hotspot regions,
     /// then returns padded JPEG crops from the full-resolution current frame.
     /// Returns an empty list when motion is too diffuse to isolate distinct hotspots.

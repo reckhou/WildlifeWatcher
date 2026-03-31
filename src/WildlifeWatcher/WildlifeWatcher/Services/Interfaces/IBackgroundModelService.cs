@@ -2,17 +2,38 @@ namespace WildlifeWatcher.Services.Interfaces;
 
 public interface IBackgroundModelService
 {
-    /// <summary>Decode frame, update EMA background, compute foreground mask.</summary>
+    /// <summary>
+    /// Initialize the model resolution. Called once when the first frame arrives
+    /// or when grid preset changes. Resets the model.
+    /// </summary>
+    void Initialize(int downscaleWidth, int downscaleHeight);
+
+    /// <summary>
+    /// Update the EMA background model only. Called by the standalone timer.
+    /// Adapts the background toward the current frame. Does NOT produce foreground/temporal outputs.
+    /// </summary>
+    void UpdateBackground(byte[] pngFrame);
+
+    /// <summary>
+    /// Compute foreground and temporal delta for a given frame against the current background.
+    /// Read-only — does not mutate the background model.
+    /// The caller provides previousGray for temporal delta (null on first call = zero delta).
+    /// Returns new arrays each call. grayPixels can be passed as previousGray on the next call.
+    /// </summary>
+    (float[] foreground, float[] temporalDelta, byte[] grayPixels) ComputeForeground(byte[] pngFrame, byte[]? previousGray);
+
+    /// <summary>Convenience method — calls UpdateBackground then ComputeForeground internally.</summary>
+    [Obsolete("Use UpdateBackground and ComputeForeground separately.")]
     void ProcessFrame(byte[] pngFrame);
 
-    /// <summary>Per-pixel foreground intensity (0–255). Null until first frame processed.</summary>
+    /// <summary>Per-pixel foreground intensity (0–255). Null until first frame processed via ProcessFrame.</summary>
     float[]? Foreground { get; }
 
-    /// <summary>Per-pixel temporal delta (0–255) — absolute frame-to-frame difference. Null until second frame processed.</summary>
+    /// <summary>Per-pixel temporal delta (0–255). Null until second frame processed via ProcessFrame.</summary>
     float[]? TemporalDelta { get; }
 
-    int Width  { get; }  // 160
-    int Height { get; } // 120
+    int Width  { get; }
+    int Height { get; }
 
     void Reset();
 
@@ -43,7 +64,7 @@ public interface IBackgroundModelService
     /// <summary>True once FrameCount >= TrainingFramesNeeded.</summary>
     bool IsTrainingComplete { get; }
 
-    /// <summary>Fired on every ProcessFrame call with the current progress (0.0–1.0).</summary>
+    /// <summary>Fired on every UpdateBackground call with the current progress (0.0–1.0).</summary>
     event EventHandler<double> TrainingProgressChanged;
 
     /// <summary>

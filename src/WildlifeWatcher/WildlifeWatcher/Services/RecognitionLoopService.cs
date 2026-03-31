@@ -21,6 +21,14 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     private DateTime _cooldownUntil = DateTime.MinValue;
     private bool _wasInDaylightWindow = true;
 
+    // Track previous gray pixels for temporal delta in the detection tick
+    private byte[]? _tickPreviousGray;
+
+    // Track camera resolution for dynamic grid initialization
+    private int _cameraWidth;
+    private int _cameraHeight;
+    private int _lastCellSize;
+
     public bool IsRunning   { get; private set; }
     public bool IsAnalyzing { get; private set; }
 
@@ -62,6 +70,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         IsRunning = true;
         _cts      = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _ = Task.Run(() => RunLoopAsync(_cts.Token), _cts.Token);
+        _ = Task.Run(() => RunBackgroundUpdateLoopAsync(_cts.Token), _cts.Token);
         _logger.LogInformation("Recognition loop started");
         return Task.CompletedTask;
     }
@@ -82,6 +91,83 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
+    }
+
+    // ── Standalone background update loop ─────────────────────────────────
+
+    private async Task RunBackgroundUpdateLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var intervalSeconds = _settings.CurrentSettings.BackgroundUpdateIntervalSeconds;
+                await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(intervalSeconds, 1, 30)), ct);
+                if (ct.IsCancellationRequested || !_camera.IsConnected) continue;
+
+                try
+                {
+                    var frame = await _camera.ExtractFrameAsync();
+                    if (frame == null) continue;
+
+                    EnsureInitialized(frame);
+                    _background.UpdateBackground(frame);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Background update tick failed");
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error in background update loop");
+        }
+    }
+
+    /// <summary>
+    /// Decode frame dimensions and initialize background + POI services if not yet done
+    /// or if the camera resolution / cell size changed.
+    /// </summary>
+    private void EnsureInitialized(byte[] pngFrame)
+    {
+        var settings = _settings.CurrentSettings;
+        int cellSize = settings.PoiCellSizePixels;
+
+        // Decode frame dimensions (cheap — just reads header)
+        int frameW, frameH;
+        using (var ms = new System.IO.MemoryStream(pngFrame))
+        {
+            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                ms, System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                System.Windows.Media.Imaging.BitmapCacheOption.None);
+            var frame = decoder.Frames[0];
+            frameW = frame.PixelWidth;
+            frameH = frame.PixelHeight;
+        }
+
+        if (frameW == _cameraWidth && frameH == _cameraHeight && cellSize == _lastCellSize)
+            return; // already initialized with same params
+
+        _cameraWidth  = frameW;
+        _cameraHeight = frameH;
+        _lastCellSize = cellSize;
+
+        var (gridCols, gridRows, downscaleW, downscaleH) =
+            PointOfInterestService.ComputeGridDimensions(frameW, frameH, cellSize);
+
+        _poi.Initialize(gridCols, gridRows);
+        _background.Initialize(downscaleW, downscaleH);
+        _tickPreviousGray = null;
+
+        _logger.LogInformation(
+            "Initialized: camera {CamW}×{CamH}, cell size {Cell}px → grid {Cols}×{Rows}, downscale {DsW}×{DsH}",
+            frameW, frameH, cellSize, gridCols, gridRows, downscaleW, downscaleH);
+
+        // Try to restore persisted background model (may fail if dimensions changed)
+        if (_background.LoadState())
+            _logger.LogInformation("Background model restored from disk (frame count {Count})", _background.FrameCount);
     }
 
     // ── Main loop ─────────────────────────────────────────────────────────
@@ -117,11 +203,14 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         // Clear POI overlay at the start of each tick
         PoiRegionsDetected?.Invoke(this, Array.Empty<PoiRegion>());
 
-        // ── Update background model ──────────────────────────────────────
-        _background.ProcessFrame(currentFrame);
-        var fg = _background.Foreground;
-        var temporalDelta = _background.TemporalDelta;
-        if (fg == null) return; // first frame — no background established yet
+        // ── Ensure services are initialized ─────────────────────────────
+        EnsureInitialized(currentFrame);
+
+        // ── Compute foreground against current background ────────────────
+        var (fg, temporalDelta, grayPixels) = _background.ComputeForeground(currentFrame, _tickPreviousGray);
+        _tickPreviousGray = grayPixels;
+
+        if (_background.FrameCount == 0) return; // background not yet seeded
 
         // ── Training gate: defer POI + AI until background model is ready ─
         if (!_background.IsTrainingComplete)
@@ -156,13 +245,26 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold, settings.PoiSensitivity,
                 temporalDelta, settings.MotionTemporalThreshold, settings.MotionTemporalCellFraction);
             _logger.LogInformation("POI extraction: {Count} region(s) found", poiRegions.Count);
-            PoiRegionsDetected?.Invoke(this, poiRegions);
 
             if (poiRegions.Count == 0)
             {
                 _logger.LogInformation("POI extraction found 0 regions — skipping AI call");
+                PoiRegionsDetected?.Invoke(this, poiRegions);
                 return;
             }
+
+            // ── Burst capture ────────────────────────────────────────────
+            if (settings.EnableBurstCapture && poiRegions.Count > 0)
+            {
+                var burstResult = await RunBurstCaptureAsync(currentFrame, settings, zones, ct);
+                if (burstResult.regions.Count > 0)
+                {
+                    poiRegions = burstResult.regions;
+                    currentFrame = burstResult.bestFrame ?? currentFrame;
+                }
+            }
+
+            PoiRegionsDetected?.Invoke(this, poiRegions);
         }
 
         // ── Cooldown check ───────────────────────────────────────────────
@@ -234,6 +336,102 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         }
     }
 
+    // ── Burst capture ────────────────────────────────────────────────────
+
+    private async Task<(IReadOnlyList<PoiRegion> regions, byte[]? bestFrame)> RunBurstCaptureAsync(
+        byte[] triggerFrame, AppConfiguration settings,
+        IReadOnlyList<MotionZone>? zones, CancellationToken ct)
+    {
+        var poiSvc = (PointOfInterestService)_poi;
+        int burstCount = Math.Clamp(settings.BurstFrameCount, 3, 30);
+        int intervalMs = Math.Clamp(settings.BurstIntervalMs, 200, 3000);
+
+        // Get grid dimensions for heatmap
+        var (gridCols, gridRows, _, _) = PointOfInterestService.ComputeGridDimensions(
+            _cameraWidth, _cameraHeight, settings.PoiCellSizePixels);
+        var heatmap = new float[gridRows, gridCols];
+
+        byte[]? burstPreviousGray = null;
+        var burstFrames = new List<(byte[] frame, float[,] hotCells)>(burstCount);
+
+        _logger.LogInformation("Burst capture starting: {Count} frames at {Interval}ms intervals",
+            burstCount, intervalMs);
+
+        for (int i = 0; i < burstCount; i++)
+        {
+            await Task.Delay(intervalMs, ct);
+            if (!_camera.IsConnected) break;
+
+            var frame = await _camera.ExtractFrameAsync();
+            if (frame == null) continue;
+
+            var (burstFg, burstTd, burstGray) = _background.ComputeForeground(frame, burstPreviousGray);
+            burstPreviousGray = burstGray;
+
+            var hotCells = poiSvc.ComputeHotCellGrid(burstFg, burstTd, zones,
+                settings.MotionPixelThreshold, settings.PoiSensitivity,
+                settings.MotionTemporalThreshold, settings.MotionTemporalCellFraction);
+            poiSvc.AccumulateHeatmap(heatmap, hotCells);
+            burstFrames.Add((frame, hotCells));
+
+            _logger.LogDebug("Burst capture: frame {Index}/{Total}", i + 1, burstCount);
+        }
+
+        if (burstFrames.Count == 0)
+            return (Array.Empty<PoiRegion>(), null);
+
+        // Extract heatmap regions
+        var heatmapRegions = poiSvc.ExtractHeatmapRegions(heatmap, minHitCount: 2, settings.PoiSensitivity);
+        _logger.LogInformation("Burst complete: {Count} heatmap region(s) from {Frames} frames",
+            heatmapRegions.Count, burstFrames.Count);
+
+        if (heatmapRegions.Count == 0)
+            return (Array.Empty<PoiRegion>(), null);
+
+        // For each region, find the burst frame where the region's cells had highest total intensity,
+        // then crop from that frame
+        var regions = new List<PoiRegion>();
+        byte[]? overallBestFrame = null;
+        float overallBestIntensity = 0;
+
+        for (int ri = 0; ri < heatmapRegions.Count; ri++)
+        {
+            var (minRow, maxRow, minCol, maxCol, _) = heatmapRegions[ri];
+
+            // Find the best burst frame for this region
+            float bestIntensity = 0;
+            int bestIdx = 0;
+            for (int fi = 0; fi < burstFrames.Count; fi++)
+            {
+                float total = 0;
+                var cells = burstFrames[fi].hotCells;
+                for (int r = minRow; r <= maxRow; r++)
+                for (int c = minCol; c <= maxCol; c++)
+                    total += cells[r, c];
+
+                if (total > bestIntensity)
+                {
+                    bestIntensity = total;
+                    bestIdx = fi;
+                }
+            }
+
+            var bestFrame = burstFrames[bestIdx].frame;
+            var crop = poiSvc.CropRegion(bestFrame, minRow, maxRow, minCol, maxCol, regions.Count + 1);
+            if (crop != null)
+            {
+                regions.Add(crop);
+                if (bestIntensity > overallBestIntensity)
+                {
+                    overallBestIntensity = bestIntensity;
+                    overallBestFrame = bestFrame;
+                }
+            }
+        }
+
+        return (regions, overallBestFrame);
+    }
+
     // ── Test POI ──────────────────────────────────────────────────────────
 
     public async Task<string> TriggerTestPoiAsync()
@@ -247,10 +445,10 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
         var settings = _settings.CurrentSettings;
 
-        _background.ProcessFrame(frame);
-        var fg           = _background.Foreground;
-        var temporalDelta = _background.TemporalDelta;
-        if (fg == null)
+        EnsureInitialized(frame);
+
+        var (fg, temporalDelta, _) = _background.ComputeForeground(frame, null);
+        if (_background.FrameCount == 0)
             return "Background model not ready yet (first frame).";
 
         var zones = settings.MotionWhitelistZones.Count > 0
@@ -263,6 +461,18 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
                 settings.PoiSensitivity, temporalDelta, settings.MotionTemporalThreshold,
                 settings.MotionTemporalCellFraction);
             _logger.LogInformation("Test POI extraction: {Count} region(s) found", regions.Count);
+
+            // Run burst if enabled and initial POI found regions
+            if (settings.EnableBurstCapture && regions.Count > 0)
+            {
+                var burstResult = await RunBurstCaptureAsync(frame, settings, zones, CancellationToken.None);
+                if (burstResult.regions.Count > 0)
+                {
+                    regions = burstResult.regions;
+                    frame = burstResult.bestFrame ?? frame;
+                }
+            }
+
             PoiRegionsDetected?.Invoke(this, regions);
         }
 
@@ -270,10 +480,15 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             return "POI extraction found 0 regions — nothing to save.";
 
         if (!settings.SavePoiDebugImages)
-            return $"Test POI: {regions.Count} region(s) found — debug image saving is disabled.";
+            return settings.EnableBurstCapture
+                ? $"Burst POI: {regions.Count} region(s) from {settings.BurstFrameCount} frames — debug image saving is disabled."
+                : $"Test POI: {regions.Count} region(s) found — debug image saving is disabled.";
 
-        await SaveDebugPoiAsync(frame, regions, settings, "Test POI (no AI)", CancellationToken.None);
-        return $"Test POI: {regions.Count} region(s) found and saved to captures folder.";
+        string label = settings.EnableBurstCapture ? "Burst POI (no AI)" : "Test POI (no AI)";
+        await SaveDebugPoiAsync(frame, regions, settings, label, CancellationToken.None);
+        return settings.EnableBurstCapture
+            ? $"Burst POI: {regions.Count} region(s) from {settings.BurstFrameCount} frames, saved to captures folder."
+            : $"Test POI: {regions.Count} region(s) found and saved to captures folder.";
     }
 
     // ── Debug saving ──────────────────────────────────────────────────────

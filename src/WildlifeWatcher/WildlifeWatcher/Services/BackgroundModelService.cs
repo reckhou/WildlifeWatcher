@@ -13,12 +13,9 @@ namespace WildlifeWatcher.Services;
 /// </summary>
 public class BackgroundModelService : IBackgroundModelService
 {
-    private const int W = 160;
-    private const int H = 120;
-
-    // File format v3: magic (4) + version (1) + W (4) + H (4) + savedAtTicks (8) + frameCount (4) + floats (W*H*4)
+    // File format v4: magic (4) + version (1) + W (4) + H (4) + savedAtTicks (8) + frameCount (4) + floats (W*H*4)
     private const int    FileMagic   = 0x57424D47; // "WBMG"
-    private const byte   FileVersion = 3;
+    private const byte   FileVersion = 4;
     private const double StaleHours  = 2.0;
 
     private static string StatePath => Path.Combine(
@@ -26,6 +23,10 @@ public class BackgroundModelService : IBackgroundModelService
         "WildlifeWatcher", "background_model.bin");
 
     private readonly ISettingsService _settings;
+    private readonly object _lock = new();
+
+    private int _width;
+    private int _height;
     private float[]? _background;
     private float[]? _foreground;
     private byte[]? _previousGray;
@@ -37,8 +38,8 @@ public class BackgroundModelService : IBackgroundModelService
 
     public float[]? Foreground => _foreground;
     public float[]? TemporalDelta => _temporalDelta;
-    public int Width  => W;
-    public int Height => H;
+    public int Width  => _width;
+    public int Height => _height;
 
     public int FrameCount => _frameCount;
 
@@ -57,30 +58,101 @@ public class BackgroundModelService : IBackgroundModelService
         _settings = settings;
     }
 
-    public void ProcessFrame(byte[] pngFrame)
+    public void Initialize(int downscaleWidth, int downscaleHeight)
     {
-        var gray  = ToGrayPixels(pngFrame);
+        lock (_lock)
+        {
+            _width  = downscaleWidth;
+            _height = downscaleHeight;
+            _background    = null;
+            _foreground    = new float[_width * _height];
+            _temporalDelta = new float[_width * _height];
+            _previousGray  = null;
+            _frameCount    = 0;
+            _skipGate      = false;
+            SavedAt        = null;
+        }
+    }
+
+    public void UpdateBackground(byte[] pngFrame)
+    {
+        var gray  = ToGrayPixels(pngFrame, _width, _height);
         var alpha = _settings.CurrentSettings.MotionBackgroundAlpha;
 
-        if (_background == null)
+        lock (_lock)
         {
-            _background = Array.ConvertAll(gray, b => (float)b);
-            _foreground = new float[W * H];
-            _temporalDelta = new float[W * H];
+            if (_background == null)
+            {
+                _background = Array.ConvertAll(gray, b => (float)b);
+                _previousGray = gray;
+                return;
+            }
+
+            for (int i = 0; i < gray.Length; i++)
+                _background[i] = (float)(alpha * gray[i] + (1 - alpha) * _background[i]);
+
             _previousGray = gray;
-            return;
         }
 
-        for (int i = 0; i < gray.Length; i++)
+        _frameCount++;
+        SavedAt = DateTime.UtcNow;
+        TrainingProgressChanged?.Invoke(this, TrainingProgress);
+    }
+
+    public (float[] foreground, float[] temporalDelta, byte[] grayPixels) ComputeForeground(byte[] pngFrame, byte[]? previousGray)
+    {
+        var gray = ToGrayPixels(pngFrame, _width, _height);
+        int len  = gray.Length;
+        var fg   = new float[len];
+        var td   = new float[len];
+
+        float[] bgSnap;
+        lock (_lock)
         {
-            _foreground![i] = Math.Abs(gray[i] - _background[i]);
-            _temporalDelta![i] = _previousGray != null
-                ? Math.Abs(gray[i] - _previousGray[i])
-                : 0f;
-            _background[i]  = (float)(alpha * gray[i] + (1 - alpha) * _background[i]);
+            if (_background == null)
+                return (fg, td, gray);
+
+            bgSnap = new float[len];
+            Array.Copy(_background, bgSnap, len);
         }
 
-        _previousGray = gray;
+        for (int i = 0; i < len; i++)
+        {
+            fg[i] = Math.Abs(gray[i] - bgSnap[i]);
+            td[i] = previousGray != null ? Math.Abs(gray[i] - previousGray[i]) : 0f;
+        }
+
+        return (fg, td, gray);
+    }
+
+    [Obsolete("Use UpdateBackground and ComputeForeground separately.")]
+    public void ProcessFrame(byte[] pngFrame)
+    {
+        var gray  = ToGrayPixels(pngFrame, _width, _height);
+        var alpha = _settings.CurrentSettings.MotionBackgroundAlpha;
+
+        lock (_lock)
+        {
+            if (_background == null)
+            {
+                _background    = Array.ConvertAll(gray, b => (float)b);
+                _foreground    = new float[_width * _height];
+                _temporalDelta = new float[_width * _height];
+                _previousGray  = gray;
+                return;
+            }
+
+            for (int i = 0; i < gray.Length; i++)
+            {
+                _foreground![i]    = Math.Abs(gray[i] - _background[i]);
+                _temporalDelta![i] = _previousGray != null
+                    ? Math.Abs(gray[i] - _previousGray[i])
+                    : 0f;
+                _background[i] = (float)(alpha * gray[i] + (1 - alpha) * _background[i]);
+            }
+
+            _previousGray = gray;
+        }
 
         _frameCount++;
         SavedAt = DateTime.UtcNow;
@@ -89,34 +161,40 @@ public class BackgroundModelService : IBackgroundModelService
 
     public void Reset()
     {
-        _background = null;
-        _foreground = null;
-        _previousGray = null;
-        _temporalDelta = null;
-        _frameCount = 0;
-        _skipGate   = false;
-        SavedAt     = null;
+        lock (_lock)
+        {
+            _background    = null;
+            _foreground    = null;
+            _previousGray  = null;
+            _temporalDelta = null;
+            _frameCount    = 0;
+            _skipGate      = false;
+            SavedAt        = null;
+        }
     }
 
     public void SaveState()
     {
-        if (_background == null) return;
+        lock (_lock)
+        {
+            if (_background == null || _width == 0 || _height == 0) return;
 
-        Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
-        using var fs = File.Open(StatePath, FileMode.Create, FileAccess.Write);
-        using var bw = new BinaryWriter(fs);
+            Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
+            using var fs = File.Open(StatePath, FileMode.Create, FileAccess.Write);
+            using var bw = new BinaryWriter(fs);
 
-        bw.Write(FileMagic);
-        bw.Write(FileVersion);
-        bw.Write(W);
-        bw.Write(H);
-        var now = DateTime.UtcNow;
-        bw.Write(now.Ticks);
-        bw.Write(_frameCount);
-        foreach (var f in _background)
-            bw.Write(f);
+            bw.Write(FileMagic);
+            bw.Write(FileVersion);
+            bw.Write(_width);
+            bw.Write(_height);
+            var now = DateTime.UtcNow;
+            bw.Write(now.Ticks);
+            bw.Write(_frameCount);
+            foreach (var f in _background)
+                bw.Write(f);
 
-        SavedAt = now;
+            SavedAt = now;
+        }
     }
 
     public bool LoadState()
@@ -130,8 +208,13 @@ public class BackgroundModelService : IBackgroundModelService
 
             if (br.ReadInt32() != FileMagic)   return false;
             if (br.ReadByte()  != FileVersion) return false;
-            if (br.ReadInt32() != W)           return false;
-            if (br.ReadInt32() != H)           return false;
+
+            int savedW = br.ReadInt32();
+            int savedH = br.ReadInt32();
+
+            // Reject files with mismatched dimensions
+            if (_width > 0 && _height > 0 && (savedW != _width || savedH != _height))
+                return false;
 
             var savedAt = new DateTime(br.ReadInt64(), DateTimeKind.Utc);
             if (DateTime.UtcNow - savedAt > TimeSpan.FromHours(StaleHours))
@@ -139,17 +222,22 @@ public class BackgroundModelService : IBackgroundModelService
 
             int savedFrameCount = br.ReadInt32();
 
-            var bg = new float[W * H];
+            var bg = new float[savedW * savedH];
             for (int i = 0; i < bg.Length; i++)
                 bg[i] = br.ReadSingle();
 
-            _background = bg;
-            _foreground = new float[W * H];
-            _temporalDelta = new float[W * H];
-            _previousGray = null; // Will be set on first ProcessFrame after load
-            _frameCount = savedFrameCount;
-            _skipGate   = true; // data is fresh enough — skip the adaptation wait
-            SavedAt     = savedAt;
+            lock (_lock)
+            {
+                _width         = savedW;
+                _height        = savedH;
+                _background    = bg;
+                _foreground    = new float[savedW * savedH];
+                _temporalDelta = new float[savedW * savedH];
+                _previousGray  = null;
+                _frameCount    = savedFrameCount;
+                _skipGate      = true;
+                SavedAt        = savedAt;
+            }
             return true;
         }
         catch
@@ -170,8 +258,11 @@ public class BackgroundModelService : IBackgroundModelService
         TrainingProgressChanged?.Invoke(this, TrainingProgress);
     }
 
-    private static byte[] ToGrayPixels(byte[] pngBytes)
+    private static byte[] ToGrayPixels(byte[] pngBytes, int w, int h)
     {
+        if (w <= 0 || h <= 0)
+            throw new InvalidOperationException("BackgroundModelService not initialized — call Initialize() first.");
+
         using var pngStream = new MemoryStream(pngBytes);
         var source = BitmapFrame.Create(
             pngStream,
@@ -180,14 +271,14 @@ public class BackgroundModelService : IBackgroundModelService
 
         var scaled = new TransformedBitmap(source,
             new ScaleTransform(
-                (double)W / source.PixelWidth,
-                (double)H / source.PixelHeight));
+                (double)w / source.PixelWidth,
+                (double)h / source.PixelHeight));
 
         var gray = new FormatConvertedBitmap(scaled, PixelFormats.Gray8, null, 0);
         gray.Freeze();
 
-        var pixels = new byte[W * H];
-        gray.CopyPixels(pixels, W, 0);
+        var pixels = new byte[w * h];
+        gray.CopyPixels(pixels, w, 0);
         return pixels;
     }
 }
