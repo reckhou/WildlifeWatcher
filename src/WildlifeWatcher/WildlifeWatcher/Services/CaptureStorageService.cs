@@ -31,7 +31,7 @@ public class CaptureStorageService : ICaptureStorageService
         _logger    = logger;
     }
 
-    public async Task SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null, DateTime? batchStartedAt = null)
+    public async Task<CaptureRecord?> SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null, DateTime? batchStartedAt = null)
     {
         // Per-species cooldown: skip saving if this species was captured before this batch started.
         // Captures made within the same batch (batchStartedAt) are excluded from the check so that
@@ -59,7 +59,7 @@ public class CaptureStorageService : ICaptureStorageService
                     result.CommonName,
                     (batchCutoff - latestCapture.Value).TotalMinutes,
                     cooldownMinutes);
-                return;
+                return null;
             }
         }
 
@@ -184,6 +184,7 @@ public class CaptureStorageService : ICaptureStorageService
 
         record.Species = species;
         CaptureSaved?.Invoke(this, record);
+        return record;
     }
 
     public async Task ResetGalleryAsync(string capturesDirectory)

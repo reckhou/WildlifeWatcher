@@ -172,13 +172,20 @@ public partial class LiveViewModel : ViewModelBase
     [RelayCommand]
     private async Task OpenDetectionAsync(DetectionEvent e)
     {
-        var dayCaptures = await _captureStorage.GetCapturesByDateAsync(e.DetectedAt.Date);
-        var match = dayCaptures
-            .Where(c => c.Species.CommonName == e.Result.CommonName)
-            .MinBy(c => Math.Abs((c.CapturedAt - e.DetectedAt).Ticks));
-        if (match is null) return;
+        CaptureRecord? record = e.SavedRecord;
 
-        var dialog = new CaptureDetailDialog(match, _captureStorage);
+        // Fallback for events that pre-date the SavedRecord field (e.g. loaded from session)
+        if (record is null)
+        {
+            var dayCaptures = await _captureStorage.GetCapturesByDateAsync(e.DetectedAt.Date);
+            record = dayCaptures
+                .Where(c => c.Species.CommonName == e.Result.CommonName)
+                .MinBy(c => Math.Abs((c.CapturedAt - e.DetectedAt).Ticks));
+        }
+
+        if (record is null) return;
+
+        var dialog = new CaptureDetailDialog(record, _captureStorage);
         dialog.ShowDialog();
     }
 

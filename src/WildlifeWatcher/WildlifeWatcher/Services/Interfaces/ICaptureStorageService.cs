@@ -18,7 +18,8 @@ public interface ICaptureStorageService
 {
     event EventHandler<CaptureRecord> CaptureSaved;
     event EventHandler GalleryReset;
-    Task SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null, DateTime? batchStartedAt = null);
+    /// <summary>Saves a capture. Returns the saved record, or null if skipped (e.g. per-species cooldown).</summary>
+    Task<CaptureRecord?> SaveCaptureAsync(byte[] framePng, RecognitionResult result, IReadOnlyList<PoiRegion>? poiRegions = null, DateTime? batchStartedAt = null);
     Task<IReadOnlyList<SpeciesSummary>> GetAllSpeciesSummariesAsync();
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId);
     Task<IReadOnlyList<CaptureRecord>> GetCapturesBySpeciesAsync(int speciesId, int skip, int take);

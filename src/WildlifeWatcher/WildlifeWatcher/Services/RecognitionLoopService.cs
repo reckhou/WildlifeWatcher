@@ -340,15 +340,21 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
                         cooldownSet    = true;
                     }
 
-                    try { await _captureStorage.SaveCaptureAsync(currentFrame, result, poiRegions, batchStartedAt); }
+                    CaptureRecord? savedRecord = null;
+                    try { savedRecord = await _captureStorage.SaveCaptureAsync(currentFrame, result, poiRegions, batchStartedAt); }
                     catch (Exception ex) { _logger.LogError(ex, "Failed to save capture"); }
+
+                    // Only surface the detection if it was actually persisted — prevents
+                    // recent-detection items that have no matching DB record when clicked.
+                    if (savedRecord is null) continue;
 
                     var evt = new DetectionEvent
                     {
-                        DetectedAt = DateTime.Now,
-                        Result     = result,
-                        FramePng   = currentFrame,
-                        PoiRegions = poiRegions
+                        DetectedAt  = DateTime.Now,
+                        Result      = result,
+                        FramePng    = currentFrame,
+                        PoiRegions  = poiRegions,
+                        SavedRecord = savedRecord
                     };
                     DetectionOccurred?.Invoke(this, evt);
                     _logger.LogInformation(

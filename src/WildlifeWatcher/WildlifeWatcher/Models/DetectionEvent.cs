@@ -8,6 +8,8 @@ public class DetectionEvent
     public RecognitionResult Result { get; init; } = null!;
     public byte[] FramePng { get; init; } = Array.Empty<byte>();
     public IReadOnlyList<PoiRegion> PoiRegions { get; init; } = Array.Empty<PoiRegion>();
+    /// <summary>The DB record written by this detection. Null only if the save was skipped.</summary>
+    public CaptureRecord? SavedRecord { get; init; }
 
     /// <summary>
     /// JPEG bytes of the POI crop that triggered this detection.
