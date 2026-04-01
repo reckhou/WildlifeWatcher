@@ -35,32 +35,13 @@ A garden wildlife watcher application built with C# .NET WPF that monitors live 
 All settings are managed through the app's Settings interface:
 - **Camera** — RTSP URL, username, and password
 - **AI Provider** — Choose Claude or Gemini and select your preferred model
-- **Capture** — Cooldown interval, sensitivity thresholds
+- **Capture** — Global cooldown between API calls; per-species cooldown to avoid duplicate saves; minimum confidence threshold
+- **Motion Detection** — POI (Point of Interest) extraction sensitivity; background model parameters; pixel and temporal thresholds; motion whitelist zones; burst capture (number of frames and interval)
+- **Daylight Detection** — Optionally restrict detection to daylight hours with configurable sunrise/sunset offsets
 - **Storage** — Custom paths for captures and database
-- **Location** — Set your garden's location for weather and timezone
+- **Location** — Set your garden's location for weather data and daylight window calculation
+- **Display** — UI scale factor (independent of Windows display scaling)
 - **Debug** — Optional debug settings and forced update testing
-
-## License
-
-This project is released under the **Do What The F*ck You Want To Public License** (WTFPL).
-
-```
-DO WHAT THE F*CK YOU WANT TO PUBLIC LICENSE
-Version 2, December 2004
-
-Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
-
-Everyone is permitted to copy and distribute verbatim or modified
-copies of this license document, and changing it is allowed as long
-as the name is changed.
-
-DO WHAT THE F*CK YOU WANT TO PUBLIC LICENSE
-TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
-
-0. You just DO WHAT THE F*CK YOU WANT TO.
-```
-
-See [WTFPL](http://www.wtfpl.net/) for details.
 
 ## Development
 
@@ -71,7 +52,6 @@ Built with:
 - **LibVLCSharp** — RTSP streaming
 - **Anthropic SDK** — Claude AI integration
 - **Generative AI SDK** — Google Gemini integration
-- **Community Toolkit MVVM** — Modern WPF patterns
 
 ## Contributing
 

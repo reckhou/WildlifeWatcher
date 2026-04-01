@@ -2,7 +2,7 @@ using System.IO;
 
 namespace WildlifeWatcher.Models;
 
-public enum AiProvider { Claude, Gemini, LocalOnly }
+public enum AiProvider { Claude, Gemini }
 
 public class AppConfiguration
 {
@@ -30,7 +30,6 @@ public class AppConfiguration
     public int FrameExtractionIntervalSeconds { get; set; } = 30;
     public double MinConfidenceThreshold { get; set; } = 0.7;
     public AiProvider AiProvider { get; set; } = AiProvider.Claude;
-    public string LocalModelPath { get; set; } = string.Empty;
     public bool EnablePoiExtraction { get; set; } = true;
     public bool SavePoiDebugImages { get; set; } = true;
 
