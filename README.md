@@ -26,7 +26,7 @@ A garden wildlife watcher application built with C# .NET WPF that monitors live 
 1. Download the latest release from [Releases](https://github.com/reckhou/WildlifeWatcher/releases)
 2. Extract and run `WildlifeWatcher.exe`
 3. Configure your camera's RTSP URL and credentials
-4. Add your AI provider API key (Claude or Gemini)
+4. Add your AI provider API key (Claude or Gemini. `gemini-2.5-flash-lite` is recommended for speed and cost, decent detection quality)
 5. Adjust detection sensitivity and capture cooldown settings
 6. Start monitoring!
 
