@@ -166,7 +166,17 @@ public class RtspCameraService : ICameraService
         var tempFile = Path.Combine(Path.GetTempPath(), $"ww_frame_{Guid.NewGuid():N}.png");
         try
         {
-            var success = await Task.Run(() => _mediaPlayer.TakeSnapshot(0, tempFile, 0, 0));
+            // TakeSnapshot is a blocking native call that can deadlock indefinitely when
+            // VLC loses the RTSP feed. Race it against a 5-second timeout so the detection
+            // loop never stalls on a dropped connection.
+            var snapshotTask = Task.Run(() => _mediaPlayer.TakeSnapshot(0, tempFile, 0, 0));
+            if (await Task.WhenAny(snapshotTask, Task.Delay(5_000)) != snapshotTask)
+            {
+                _logger.LogWarning("Frame extraction timed out — camera may have disconnected");
+                return null;
+            }
+
+            var success = await snapshotTask;
             if (!success || !File.Exists(tempFile)) return null;
             return await File.ReadAllBytesAsync(tempFile);
         }
@@ -185,7 +195,12 @@ public class RtspCameraService : ICameraService
     private void OnLibVlcLog(object? sender, LogEventArgs e)
     {
         // Suppress known benign VLC internal probes that produce noisy warnings
-        if (e.Message != null && e.Message.Contains("unsupported control query"))
+        if (e.Message != null && (
+            e.Message.Contains("unsupported control query") ||
+            e.Message.Contains("playback too early") ||
+            e.Message.Contains("playback way too early") ||
+            e.Message.Contains("playback too late") ||
+            e.Message.Contains("timing screwed")))
             return;
 
         // Keep a rolling window of recent messages for error reporting

@@ -18,6 +18,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     private readonly ILogger<RecognitionLoopService> _logger;
 
     private CancellationTokenSource? _cts;
+    // Cancelled whenever the camera disconnects, reset on each disconnect so the
+    // next connection gets a fresh token. Used to abort in-progress AI calls.
+    private CancellationTokenSource _cameraConnectedCts = new();
     private DateTime _cooldownUntil = DateTime.MinValue;
     private bool _wasInDaylightWindow = true;
 
@@ -57,12 +60,25 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         _logger         = logger;
 
         _settings.SettingsChanged += OnSettingsChanged;
+        _camera.ConnectionStateChanged += OnCameraConnectionChanged;
     }
 
     private void OnSettingsChanged(object? sender, AppConfiguration settings)
     {
         bool allowed = _daylightWindow.IsDetectionAllowed(settings);
         FireDaylightWindowChanged(allowed);
+    }
+
+    private void OnCameraConnectionChanged(object? sender, bool connected)
+    {
+        if (!connected)
+        {
+            // Cancel any in-progress AI call and prepare a fresh token for the next connection.
+            var old = _cameraConnectedCts;
+            _cameraConnectedCts = new CancellationTokenSource();
+            old.Cancel();
+            old.Dispose();
+        }
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -88,9 +104,12 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     public void Dispose()
     {
         _settings.SettingsChanged -= OnSettingsChanged;
+        _camera.ConnectionStateChanged -= OnCameraConnectionChanged;
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
+        _cameraConnectedCts.Cancel();
+        _cameraConnectedCts.Dispose();
     }
 
     // ── Standalone background update loop ─────────────────────────────────
@@ -275,7 +294,15 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             return;
         }
 
+        // ── Guard: abort if camera disconnected during burst/POI ────────────
+        if (!_camera.IsConnected) return;
+
         // ── AI recognition ───────────────────────────────────────────────
+        // Link the service token with the per-connection token so an RTSP
+        // disconnection mid-call causes RecognizeAsync to return promptly.
+        var localDisconnectCts = _cameraConnectedCts;
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, localDisconnectCts.Token);
+
         var activeModel = settings.AiProvider == WildlifeWatcher.Models.AiProvider.Gemini
             ? settings.GeminiModel
             : settings.ClaudeModel;
@@ -288,7 +315,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
                 ? (IReadOnlyList<byte[]>)poiRegions.Select(r => r.CroppedJpeg).ToArray()
                 : null;
 
-            var results = await _ai.RecognizeAsync(currentFrame, poiJpegs, ct);
+            var results = await _ai.RecognizeAsync(currentFrame, poiJpegs, linkedCts.Token);
 
             if (results.Count == 0 || results.All(r => !r.Detected))
             {
@@ -329,6 +356,11 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
                         result.CommonName, result.ScientificName, result.Confidence);
                 }
             }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Cancelled by camera disconnection, not service shutdown — return quietly.
+            _logger.LogInformation("AI recognition interrupted — camera disconnected mid-call");
         }
         finally
         {
