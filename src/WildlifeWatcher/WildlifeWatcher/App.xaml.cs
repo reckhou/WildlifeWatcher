@@ -183,6 +183,7 @@ public partial class App : Application
                 await captureStorage.MergeSpeciesByScientificNameAsync();
 
                 var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+                MainWindow = mainWindow;   // Set before closing splash so WPF tracks the correct window
                 mainWindow.Show();
                 splash.Close();
             }
