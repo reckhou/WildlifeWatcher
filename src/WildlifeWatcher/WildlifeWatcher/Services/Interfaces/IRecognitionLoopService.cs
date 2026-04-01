@@ -18,6 +18,12 @@ public interface IRecognitionLoopService
     event EventHandler<bool> DaylightWindowChanged;
 
     /// <summary>
+    /// Fired during burst capture with (framesCompleted, totalFrames).
+    /// framesCompleted == 0 signals burst start; framesCompleted == totalFrames signals burst end.
+    /// </summary>
+    event EventHandler<(int completed, int total)>? BurstProgressChanged;
+
+    /// <summary>
     /// Runs a single POI detection tick (frame extract → background model → POI extraction → save debug crops).
     /// Skips AI recognition. Returns a summary string describing what was found and saved.
     /// </summary>

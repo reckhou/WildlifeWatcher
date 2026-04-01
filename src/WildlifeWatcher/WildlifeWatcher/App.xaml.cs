@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,13 @@ namespace WildlifeWatcher;
 public partial class App : Application
 {
     private IHost _host = null!;
+    private Mutex? _singleInstanceMutex;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    private const int SW_RESTORE = 9;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -45,6 +53,22 @@ public partial class App : Application
         {
             RunImportMode(importJobArg["--import-job=".Length..]);
             return; // Skip normal host startup
+        }
+
+        // Single-instance enforcement — import mode is exempt (it's spawned by the running app)
+        _singleInstanceMutex = new Mutex(true, "WildlifeWatcher_SingleInstance", out bool isFirstInstance);
+        if (!isFirstInstance)
+        {
+            // Bring the existing instance's window to the foreground
+            var existing = Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName)
+                                   .FirstOrDefault(p => p.Id != Environment.ProcessId);
+            if (existing?.MainWindowHandle is { } hwnd && hwnd != IntPtr.Zero)
+            {
+                ShowWindow(hwnd, SW_RESTORE);
+                SetForegroundWindow(hwnd);
+            }
+            Shutdown();
+            return;
         }
 
         var logDir = Path.Combine(
@@ -208,6 +232,8 @@ public partial class App : Application
             _host.Dispose();
         }
         Log.CloseAndFlush();
+        _singleInstanceMutex?.ReleaseMutex();
+        _singleInstanceMutex?.Dispose();
         base.OnExit(e);
     }
 

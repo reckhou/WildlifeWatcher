@@ -32,6 +32,9 @@ public partial class LiveViewModel : ViewModelBase
     [ObservableProperty] private string _statusText           = "Not connected";
     [ObservableProperty] private string _connectionButtonText = "Connect";
     [ObservableProperty] private bool   _isAnalyzing;
+    [ObservableProperty] private bool   _isBurstActive;
+    [ObservableProperty] private double _burstProgress;
+    [ObservableProperty] private string _burstProgressText    = string.Empty;
     [ObservableProperty] private string _lastDetectionText    = "No detections yet.";
     [ObservableProperty] private int    _volume;
     [ObservableProperty] private double _trainingProgress;
@@ -70,6 +73,7 @@ public partial class LiveViewModel : ViewModelBase
         _recognitionLoop.DetectionOccurred       += OnDetectionOccurred;
         _recognitionLoop.IsAnalyzingChanged      += OnIsAnalyzingChanged;
         _recognitionLoop.PoiRegionsDetected      += OnPoiRegionsDetected;
+        _recognitionLoop.BurstProgressChanged    += OnBurstProgressChanged;
         _backgroundModel.TrainingProgressChanged += OnTrainingProgressChanged;
         _recognitionLoop.DaylightWindowChanged   += OnDaylightWindowChanged;
         InMemoryLogSink.EntryAdded               += OnLogEntryAdded;
@@ -278,6 +282,16 @@ public partial class LiveViewModel : ViewModelBase
             PoiOverlays.Clear();
             foreach (var r in regions)
                 PoiOverlays.Add(PoiOverlayItem.FromRegion(r));
+        });
+    }
+
+    private void OnBurstProgressChanged(object? sender, (int completed, int total) e)
+    {
+        Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            IsBurstActive     = e.completed < e.total;
+            BurstProgress     = e.total > 0 ? (double)e.completed / e.total : 0;
+            BurstProgressText = IsBurstActive ? $"Burst {e.completed}/{e.total}" : string.Empty;
         });
     }
 

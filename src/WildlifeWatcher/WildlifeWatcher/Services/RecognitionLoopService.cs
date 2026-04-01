@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -42,6 +43,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     public event EventHandler<bool>?                         IsAnalyzingChanged;
     public event EventHandler<IReadOnlyList<PoiRegion>>?     PoiRegionsDetected;
     public event EventHandler<bool>?                         DaylightWindowChanged;
+    public event EventHandler<(int completed, int total)>?   BurstProgressChanged;
 
     public RecognitionLoopService(
         ICameraService              camera,
@@ -428,9 +430,20 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         _logger.LogInformation("Burst capture starting: {Count} frames at {Interval}ms intervals",
             burstCount, intervalMs);
 
+        BurstProgressChanged?.Invoke(this, (0, burstCount));
+
+        // Wall-clock scheduling: each frame targets (i+1)*intervalMs from burst start.
+        // This absorbs extraction + processing time into the interval rather than
+        // adding it on top (which would make a 200ms interval behave like ~500ms).
+        var burstStart = Stopwatch.GetTimestamp();
+
         for (int i = 0; i < burstCount; i++)
         {
-            await Task.Delay(intervalMs, ct);
+            long targetMs = (long)(i + 1) * intervalMs;
+            long waitMs = targetMs - (long)Stopwatch.GetElapsedTime(burstStart).TotalMilliseconds;
+            if (waitMs > 0)
+                await Task.Delay((int)waitMs, ct);
+
             if (!_camera.IsConnected) break;
 
             var frame = await _camera.ExtractFrameAsync();
@@ -446,7 +459,10 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             burstFrames.Add((frame, hotCells));
 
             _logger.LogDebug("Burst capture: frame {Index}/{Total}", i + 1, burstCount);
+            BurstProgressChanged?.Invoke(this, (i + 1, burstCount));
         }
+
+        BurstProgressChanged?.Invoke(this, (burstCount, burstCount));
 
         if (burstFrames.Count == 0)
             return (Array.Empty<PoiRegion>(), null);

@@ -76,7 +76,7 @@ If 0 regions are found: tick is skipped.
 
 If `EnableBurstCapture` is on and the initial single-frame POI found ≥1 region, a multi-frame burst runs:
 
-1. Capture `BurstFrameCount` frames at `BurstIntervalMs` intervals
+1. Capture `BurstFrameCount` frames at `BurstIntervalMs` intervals (wall-clock scheduled — extraction and processing time is absorbed into the interval, not added on top)
 2. For each frame, compute foreground via `ComputeForeground` and build a **weighted hot-cell grid** (cells store average foreground intensity, not just binary)
 3. Accumulate each grid into a shared **heatmap** (element-wise addition)
 4. After the burst, threshold the heatmap (cells must be hot in ≥2 frames) and BFS-extract regions

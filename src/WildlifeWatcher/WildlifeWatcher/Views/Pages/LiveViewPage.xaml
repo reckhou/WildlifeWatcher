@@ -47,6 +47,22 @@
                             </StackPanel>
                         </Grid>
 
+                        <!-- Burst progress bar — bottom-left of video, visible during burst -->
+                        <Border VerticalAlignment="Bottom" HorizontalAlignment="Left"
+                                Margin="12,0,0,12"
+                                Background="#CC0D1A0D" CornerRadius="4" Padding="8,5"
+                                Visibility="{Binding IsBurstActive,
+                                             Converter={StaticResource BoolToVisibleConverter}}">
+                            <StackPanel Orientation="Vertical" Width="160">
+                                <TextBlock Text="{Binding BurstProgressText}"
+                                           Foreground="#88FF88" FontSize="11"
+                                           FontFamily="Consolas" Margin="0,0,0,4"/>
+                                <ProgressBar Value="{Binding BurstProgress}"
+                                             Minimum="0" Maximum="1" Height="5"
+                                             Foreground="#4CAF50" Background="#1A3A1A"/>
+                            </StackPanel>
+                        </Border>
+
                         <!-- POI overlay — fixed 1600×900 canvas scaled via Viewbox.
                              Stretch=Uniform matches LibVLC's own aspect-ratio-preserving render,
                              so the overlay tiles exactly over the visible video pixels. -->
