@@ -15,10 +15,16 @@ public class InMemoryLogSink : ILogEventSink
 
     public void Emit(LogEvent logEvent)
     {
+        var message = logEvent.RenderMessage();
+
+        // Suppress VLC internal log noise from the UI panel (still written to the file log)
+        if (message.Contains("[VLC]"))
+            return;
+
         var entry = new LogEntry(
             logEvent.Timestamp.LocalDateTime,
             LevelLabel(logEvent.Level),
-            logEvent.RenderMessage(),
+            message,
             logEvent.Level >= LogEventLevel.Warning);
 
         EntryAdded?.Invoke(entry);
