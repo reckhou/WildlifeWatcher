@@ -160,7 +160,7 @@ public partial class LiveViewModel : ViewModelBase
         _backgroundModel.DeleteSavedState();
         _logger.LogInformation("Background model reset — retraining from scratch");
 
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             IsTrainingComplete   = false;
             TrainingProgress     = 0;
@@ -201,7 +201,7 @@ public partial class LiveViewModel : ViewModelBase
                 !string.IsNullOrWhiteSpace(_settings.CurrentSettings.RtspUrl))
             {
                 _logger.LogInformation("Auto-connect: attempting connection...");
-                Application.Current.Dispatcher.Invoke(() => StatusText = "Auto-connecting...");
+                _ = Application.Current.Dispatcher.InvokeAsync(() => StatusText = "Auto-connecting...");
                 try
                 {
                     await _camera.ConnectAsync();
@@ -228,7 +228,7 @@ public partial class LiveViewModel : ViewModelBase
                 ? "Background model restored from disk — skipping adaptation period"
                 : "No saved background model found — cold-starting EMA");
 
-            Application.Current.Dispatcher.Invoke(() =>
+            Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 IsTrainingComplete   = _backgroundModel.IsTrainingComplete;
                 TrainingProgress     = _backgroundModel.TrainingProgress;
@@ -243,10 +243,10 @@ public partial class LiveViewModel : ViewModelBase
             _logger.LogInformation("Background model saved to disk");
             _backgroundModel.Reset();
 
-            Application.Current.Dispatcher.Invoke(() => ModelDataAgeText = string.Empty);
+            Application.Current.Dispatcher.InvokeAsync(() => ModelDataAgeText = string.Empty);
         }
 
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             IsConnected           = connected;
             StatusText            = connected ? "Connected" : "Disconnected";
@@ -257,7 +257,7 @@ public partial class LiveViewModel : ViewModelBase
 
     private void OnDetectionOccurred(object? sender, DetectionEvent e)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             RecentDetections.Insert(0, e);
             while (RecentDetections.Count > 5)
@@ -268,12 +268,12 @@ public partial class LiveViewModel : ViewModelBase
 
     private void OnIsAnalyzingChanged(object? sender, bool analyzing)
     {
-        Application.Current.Dispatcher.Invoke(() => IsAnalyzing = analyzing);
+        Application.Current.Dispatcher.InvokeAsync(() => IsAnalyzing = analyzing);
     }
 
     private void OnPoiRegionsDetected(object? sender, IReadOnlyList<PoiRegion> regions)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             PoiOverlays.Clear();
             foreach (var r in regions)
@@ -283,7 +283,7 @@ public partial class LiveViewModel : ViewModelBase
 
     private void OnTrainingProgressChanged(object? sender, double progress)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             TrainingProgress     = progress;
             IsTrainingComplete   = _backgroundModel.IsTrainingComplete;
@@ -296,7 +296,7 @@ public partial class LiveViewModel : ViewModelBase
 
     private void OnDaylightWindowChanged(object? sender, bool allowed)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             if (allowed)
             {
@@ -342,7 +342,7 @@ public partial class LiveViewModel : ViewModelBase
 
     private void OnLogEntryAdded(LogEntry entry)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        Application.Current.Dispatcher.InvokeAsync(() =>
         {
             LogEntries.Insert(0, entry);
             while (LogEntries.Count > 200)

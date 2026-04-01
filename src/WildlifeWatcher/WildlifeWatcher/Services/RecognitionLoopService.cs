@@ -73,9 +73,8 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     {
         if (!connected)
         {
-            // Cancel any in-progress AI call and prepare a fresh token for the next connection.
-            var old = _cameraConnectedCts;
-            _cameraConnectedCts = new CancellationTokenSource();
+            // Atomically swap so no thread can Cancel/Dispose the same instance twice.
+            var old = Interlocked.Exchange(ref _cameraConnectedCts, new CancellationTokenSource());
             old.Cancel();
             old.Dispose();
         }
@@ -108,8 +107,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
-        _cameraConnectedCts.Cancel();
-        _cameraConnectedCts.Dispose();
+        var cts = Interlocked.Exchange(ref _cameraConnectedCts, null!);
+        cts?.Cancel();
+        cts?.Dispose();
     }
 
     // ── Standalone background update loop ─────────────────────────────────
@@ -300,7 +300,8 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         // ── AI recognition ───────────────────────────────────────────────
         // Link the service token with the per-connection token so an RTSP
         // disconnection mid-call causes RecognizeAsync to return promptly.
-        var localDisconnectCts = _cameraConnectedCts;
+        var localDisconnectCts = Interlocked.CompareExchange(ref _cameraConnectedCts, null!, null!);
+        if (localDisconnectCts is null) return; // disposed — service is shutting down
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, localDisconnectCts.Token);
 
         var activeModel = settings.AiProvider == WildlifeWatcher.Models.AiProvider.Gemini
