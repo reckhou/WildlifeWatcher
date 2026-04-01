@@ -21,6 +21,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     // Cancelled whenever the camera disconnects, reset on each disconnect so the
     // next connection gets a fresh token. Used to abort in-progress AI calls.
     private CancellationTokenSource _cameraConnectedCts = new();
+    // Cancelled whenever settings change so the main loop's Task.Delay exits early
+    // and re-reads the interval immediately.
+    private CancellationTokenSource _loopWakeCts = new();
     private DateTime _cooldownUntil = DateTime.MinValue;
     private bool _wasInDaylightWindow = true;
 
@@ -65,6 +68,11 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
     private void OnSettingsChanged(object? sender, AppConfiguration settings)
     {
+        // Wake the main loop so it re-reads the new interval immediately.
+        var old = Interlocked.Exchange(ref _loopWakeCts, new CancellationTokenSource());
+        old.Cancel();
+        old.Dispose();
+
         bool allowed = _daylightWindow.IsDetectionAllowed(settings);
         FireDaylightWindowChanged(allowed);
     }
@@ -110,6 +118,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         var cts = Interlocked.Exchange(ref _cameraConnectedCts, null!);
         cts?.Cancel();
         cts?.Dispose();
+        var wake = Interlocked.Exchange(ref _loopWakeCts, null!);
+        wake?.Cancel();
+        wake?.Dispose();
     }
 
     // ── Standalone background update loop ─────────────────────────────────
@@ -177,6 +188,19 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             PointOfInterestService.ComputeGridDimensions(frameW, frameH, cellSize);
 
         _poi.Initialize(gridCols, gridRows);
+
+        // If the background model was already loaded from disk (e.g. by
+        // LiveViewModel.OnConnectionStateChanged) with matching dimensions,
+        // preserve it instead of wiping and reloading.
+        if (_background.Width == downscaleW && _background.Height == downscaleH && _background.FrameCount > 0)
+        {
+            _tickPreviousGray = null;
+            _logger.LogInformation(
+                "Initialized POI grid: camera {CamW}×{CamH}, cell size {Cell}px → grid {Cols}×{Rows} (background model already loaded, frame count {Count})",
+                frameW, frameH, cellSize, gridCols, gridRows, _background.FrameCount);
+            return;
+        }
+
         _background.Initialize(downscaleW, downscaleH);
         _tickPreviousGray = null;
 
@@ -198,7 +222,15 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             while (!ct.IsCancellationRequested)
             {
                 var interval = TimeSpan.FromSeconds(_settings.CurrentSettings.FrameExtractionIntervalSeconds);
-                await Task.Delay(interval, ct);
+
+                // Link with _loopWakeCts so a settings change interrupts the delay
+                // and the loop re-reads the new interval immediately.
+                var wakeCts = Interlocked.CompareExchange(ref _loopWakeCts, null!, null!);
+                if (wakeCts is null) break; // disposed — shutting down
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, wakeCts.Token);
+                try { await Task.Delay(interval, linked.Token); }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { continue; }
+
                 if (!ct.IsCancellationRequested)
                     await ProcessTickAsync(ct);
             }

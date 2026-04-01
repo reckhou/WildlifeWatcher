@@ -327,7 +327,19 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     private async Task CaptureZoneBackgroundAsync()
     {
         IsCapturingZoneBackground = true;
-        try   { ZoneEditorBackground = await _camera.ExtractFrameAsync(); }
+        try
+        {
+            // Retry up to 3 times — TakeSnapshot can fail transiently right after
+            // the camera connects (VLC decoder not yet producing frames).
+            byte[]? frame = null;
+            for (int i = 0; i < 3 && frame == null; i++)
+            {
+                frame = await _camera.ExtractFrameAsync();
+                if (frame == null && i < 2)
+                    await Task.Delay(500);
+            }
+            ZoneEditorBackground = frame;
+        }
         finally { IsCapturingZoneBackground = false; }
     }
 

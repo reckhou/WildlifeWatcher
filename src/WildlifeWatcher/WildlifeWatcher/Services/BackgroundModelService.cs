@@ -16,7 +16,7 @@ public class BackgroundModelService : IBackgroundModelService
     // File format v4: magic (4) + version (1) + W (4) + H (4) + savedAtTicks (8) + frameCount (4) + floats (W*H*4)
     private const int    FileMagic   = 0x57424D47; // "WBMG"
     private const byte   FileVersion = 4;
-    private const double StaleHours  = 2.0;
+    private const double StaleHours  = 24.0;
 
     private static string StatePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

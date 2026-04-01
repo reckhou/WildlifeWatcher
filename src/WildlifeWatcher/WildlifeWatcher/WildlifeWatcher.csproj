@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>WildlifeWatcher</AssemblyName>
     <RootNamespace>WildlifeWatcher</RootNamespace>
-    <Version>2.1.1</Version>
+    <Version>2.1.2</Version>
     <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
 
