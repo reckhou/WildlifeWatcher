@@ -24,6 +24,19 @@ public class AppConfiguration
     public string ClaudeModel { get; set; } = "claude-haiku-4-5-20251001";
     public string GeminiModel { get; set; } = "gemini-2.0-flash";
     /// <summary>
+    /// Describes the camera's environment, inserted into the AI system prompt.
+    /// E.g. "a woodland edge with a pond". Must not be blank — default is "a garden".
+    /// </summary>
+    public string AiHabitatDescription { get; set; } = "a garden";
+
+    /// <summary>
+    /// Optional species focus hint appended to the AI system prompt.
+    /// E.g. "UK wildlife, particularly birds and small mammals".
+    /// Omitted from the prompt when blank.
+    /// </summary>
+    public string AiTargetSpeciesHint { get; set; } = "Wildlife, particularly birds";
+
+    /// <summary>
     /// How often a frame is grabbed from the camera and analysed for motion.
     /// Runs unconditionally — the loop wakes up every N seconds regardless of cooldown or detection state.
     /// </summary>

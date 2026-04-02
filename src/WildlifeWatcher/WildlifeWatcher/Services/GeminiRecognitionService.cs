@@ -10,15 +10,6 @@ namespace WildlifeWatcher.Services;
 
 public class GeminiRecognitionService : IAiRecognitionService
 {
-    private const string SystemPrompt =
-        "You are a garden wildlife identification assistant. " +
-        "This camera is mounted in a garden to observe wild animals and birds. " +
-        "Respond with strict JSON only — no markdown, no code fences. " +
-        "Format: {\"detections\":[{\"source_crop_index\":1,\"detected\":true,\"candidates\":[{\"common_name\":\"Red Fox\",\"scientific_name\":\"Vulpes vulpes\",\"confidence\":0.92,\"description\":\"...\"},{\"common_name\":\"Badger\",\"scientific_name\":\"Meles meles\",\"confidence\":0.05,\"description\":\"...\"}]},{\"source_crop_index\":2,\"detected\":true,\"candidates\":[{\"common_name\":\"Robin\",\"scientific_name\":\"Erithacus rubecula\",\"confidence\":0.87,\"description\":\"...\"}]}]} " +
-        "Report one entry per crop region that contains an animal. For each detected animal, list up to 3 candidate species in descending confidence order. " +
-        "Omit source_crop_index when analysing a single full frame. " +
-        "If no animals are visible in any region: {\"detections\":[]}";
-
     private readonly ISettingsService _settings;
     private readonly ICredentialService _credentials;
     private readonly ILogger<GeminiRecognitionService> _logger;
@@ -52,7 +43,7 @@ public class GeminiRecognitionService : IAiRecognitionService
             var googleAi = new GoogleAI(apiKey: apiKey);
             var model    = googleAi.GenerativeModel(
                 model:             modelName,
-                systemInstruction: new Content(new TextData { Text = SystemPrompt }));
+                systemInstruction: new Content(new TextData { Text = PromptBuilder.Build(_settings.CurrentSettings) }));
 
             List<IPart> parts;
             if (poiJpegs is { Count: > 0 })
