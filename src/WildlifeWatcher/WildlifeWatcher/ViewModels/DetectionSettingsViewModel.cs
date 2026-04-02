@@ -3,6 +3,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WildlifeWatcher.Models;
+using WildlifeWatcher.Services;
 using WildlifeWatcher.Services.Interfaces;
 using WildlifeWatcher.ViewModels.Base;
 
@@ -52,6 +53,14 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     [ObservableProperty] private AiProvider _aiProvider  = AiProvider.Claude;
     [ObservableProperty] private string     _claudeModel = "claude-haiku-4-5-20251001";
     [ObservableProperty] private string     _geminiModel = "gemini-2.0-flash";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PromptPreview))]
+    private string _aiHabitatDescription = "a garden";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PromptPreview))]
+    private string _aiTargetSpeciesHint = "Wildlife, particularly birds";
 
     // Not bound directly (PasswordBox can't bind) — held for pre-population in code-behind
     public string AnthropicApiKey { get; private set; } = string.Empty;
@@ -148,6 +157,9 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     public bool ShowDaylightLocationWarning =>
         EnableDaylightDetectionOnly && string.IsNullOrWhiteSpace(_settings.CurrentSettings.LocationName);
 
+    public string PromptPreview =>
+        PromptBuilder.BuildPreview(AiHabitatDescription, _settings.CurrentSettings.LocationName, AiTargetSpeciesHint);
+
     // ── Changed hooks ──────────────────────────────────────────────────────
 
     partial void OnMotionBackgroundAlphaChanged(double value)  { OnPropertyChanged(nameof(AlphaAdvice)); AutoSave(); }
@@ -172,6 +184,8 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     partial void OnAiProviderChanged(AiProvider value)            => AutoSave();
     partial void OnClaudeModelChanged(string value)               => AutoSave();
     partial void OnGeminiModelChanged(string value)               => AutoSave();
+    partial void OnAiHabitatDescriptionChanged(string value)       => AutoSave();
+    partial void OnAiTargetSpeciesHintChanged(string value)        => AutoSave();
     partial void OnSunriseOffsetMinutesChanged(int value)         => AutoSave();
     partial void OnSunsetOffsetMinutesChanged(int value)          => AutoSave();
 
@@ -222,6 +236,8 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             AiProvider                   = s.AiProvider;
             ClaudeModel                  = s.ClaudeModel;
             GeminiModel                  = s.GeminiModel;
+            AiHabitatDescription         = s.AiHabitatDescription;
+            AiTargetSpeciesHint          = s.AiTargetSpeciesHint;
             EnableDaylightDetectionOnly  = s.EnableDaylightDetectionOnly;
             SunriseOffsetMinutes         = s.SunriseOffsetMinutes;
             SunsetOffsetMinutes          = s.SunsetOffsetMinutes;
@@ -236,6 +252,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             }
 
             RefreshZoneItems();
+            OnPropertyChanged(nameof(PromptPreview));
         }
         finally
         {
@@ -269,6 +286,8 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         s.AiProvider                     = AiProvider;
         s.ClaudeModel                    = ClaudeModel;
         s.GeminiModel                    = GeminiModel;
+        s.AiHabitatDescription            = string.IsNullOrWhiteSpace(AiHabitatDescription) ? "a garden" : AiHabitatDescription;
+        s.AiTargetSpeciesHint             = AiTargetSpeciesHint;
         s.EnableDaylightDetectionOnly    = EnableDaylightDetectionOnly;
         s.SunriseOffsetMinutes           = SunriseOffsetMinutes;
         s.SunsetOffsetMinutes            = SunsetOffsetMinutes;

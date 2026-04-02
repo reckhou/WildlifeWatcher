@@ -390,6 +390,36 @@
             <TextBlock Text="API Settings" Style="{StaticResource SectionHeader}"/>
             <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
 
+            <!-- Camera Context -->
+            <TextBlock Text="Camera Context" Style="{StaticResource SectionHeader}" Margin="0,8,0,0"/>
+            <Separator Background="#DDDDDD" Margin="0,0,0,8"/>
+
+            <TextBlock Text="Habitat description" Style="{StaticResource Label}"/>
+            <TextBox Text="{Binding AiHabitatDescription, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource Field}"
+                     ToolTip="Describes the camera's environment, e.g. 'a woodland edge with a pond'"/>
+            <TextBlock Text="Replaces 'a garden' in the prompt. Must not be blank." Style="{StaticResource Hint}"/>
+
+            <TextBlock Text="Species focus hint" Style="{StaticResource Label}" Margin="0,6,0,0"/>
+            <TextBox Text="{Binding AiTargetSpeciesHint, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource Field}"
+                     ToolTip="Optional. E.g. 'UK wildlife, particularly birds and small mammals'. Leave blank to omit."/>
+            <TextBlock Text="Leave blank to omit this line from the prompt." Style="{StaticResource Hint}"/>
+
+            <!-- Prompt preview -->
+            <TextBlock Text="Prompt preview" Style="{StaticResource Label}" Margin="0,10,0,2"/>
+            <Border Background="#F0F0E8" BorderBrush="#CCCCCC" BorderThickness="1"
+                    CornerRadius="3" Padding="8,6">
+                <TextBlock Text="{Binding PromptPreview}"
+                           FontFamily="Consolas" FontSize="11"
+                           Foreground="#333333"
+                           TextWrapping="Wrap"
+                           LineHeight="18"/>
+            </Border>
+            <TextBlock Text="First lines of the assembled prompt sent to AI. JSON format instructions follow (not shown)."
+                       Style="{StaticResource Hint}" Margin="0,2,0,8"/>
+
+            <!-- Provider selector (existing) -->
             <TextBlock Text="Provider" Style="{StaticResource Label}"/>
             <ComboBox ItemsSource="{Binding AiProviders}"
                       SelectedItem="{Binding AiProvider}"

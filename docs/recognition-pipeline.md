@@ -101,6 +101,11 @@ If a detection already happened recently (`DateTime.UtcNow < _cooldownUntil`), t
 
 **If no POI crops** → falls back to the full frame, resizing it to max 1280px and compressing to JPEG 85% first.
 
+The system prompt is assembled dynamically by `PromptBuilder` from three user-configured fields in `DetectionSettingsWindow`:
+- `AiHabitatDescription` (default: "a garden") — describes the camera environment
+- `LocationName` — injected as "Location: ..." when set; omitted when blank
+- `AiTargetSpeciesHint` (default: "Wildlife, particularly birds") — injected as "Focus on: ..." when set; omitted when blank
+
 The system prompt instructs the model to respond with strict JSON:
 
 ```json
