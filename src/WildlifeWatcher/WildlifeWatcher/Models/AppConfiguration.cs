@@ -30,6 +30,12 @@ public class AppConfiguration
     public string AiHabitatDescription { get; set; } = "a garden";
 
     /// <summary>
+    /// Overrides LocationName for the AI prompt. When blank, falls back to LocationName.
+    /// Allows a prompt-specific location label independent of the weather/sunrise location.
+    /// </summary>
+    public string AiLocationContext { get; set; } = string.Empty;
+
+    /// <summary>
     /// Optional species focus hint appended to the AI system prompt.
     /// E.g. "UK wildlife, particularly birds and small mammals".
     /// Omitted from the prompt when blank.

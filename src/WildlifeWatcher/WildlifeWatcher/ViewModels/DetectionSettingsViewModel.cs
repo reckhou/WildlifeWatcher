@@ -60,6 +60,10 @@ public partial class DetectionSettingsViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PromptPreview))]
+    private string _aiLocationContext = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PromptPreview))]
     private string _aiTargetSpeciesHint = "Wildlife, particularly birds";
 
     // Not bound directly (PasswordBox can't bind) — held for pre-population in code-behind
@@ -158,7 +162,10 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         EnableDaylightDetectionOnly && string.IsNullOrWhiteSpace(_settings.CurrentSettings.LocationName);
 
     public string PromptPreview =>
-        PromptBuilder.BuildPreview(AiHabitatDescription, _settings.CurrentSettings.LocationName, AiTargetSpeciesHint);
+        PromptBuilder.BuildPreview(
+            AiHabitatDescription,
+            string.IsNullOrWhiteSpace(AiLocationContext) ? _settings.CurrentSettings.LocationName : AiLocationContext,
+            AiTargetSpeciesHint);
 
     // ── Changed hooks ──────────────────────────────────────────────────────
 
@@ -185,6 +192,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     partial void OnClaudeModelChanged(string value)               => AutoSave();
     partial void OnGeminiModelChanged(string value)               => AutoSave();
     partial void OnAiHabitatDescriptionChanged(string value)       => AutoSave();
+    partial void OnAiLocationContextChanged(string value)          => AutoSave();
     partial void OnAiTargetSpeciesHintChanged(string value)        => AutoSave();
     partial void OnSunriseOffsetMinutesChanged(int value)         => AutoSave();
     partial void OnSunsetOffsetMinutesChanged(int value)          => AutoSave();
@@ -237,6 +245,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             ClaudeModel                  = s.ClaudeModel;
             GeminiModel                  = s.GeminiModel;
             AiHabitatDescription         = s.AiHabitatDescription;
+            AiLocationContext            = s.AiLocationContext;
             AiTargetSpeciesHint          = s.AiTargetSpeciesHint;
             EnableDaylightDetectionOnly  = s.EnableDaylightDetectionOnly;
             SunriseOffsetMinutes         = s.SunriseOffsetMinutes;
@@ -287,6 +296,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         s.ClaudeModel                    = ClaudeModel;
         s.GeminiModel                    = GeminiModel;
         s.AiHabitatDescription            = string.IsNullOrWhiteSpace(AiHabitatDescription) ? "a garden" : AiHabitatDescription;
+        s.AiLocationContext               = AiLocationContext;
         s.AiTargetSpeciesHint             = AiTargetSpeciesHint;
         s.EnableDaylightDetectionOnly    = EnableDaylightDetectionOnly;
         s.SunriseOffsetMinutes           = SunriseOffsetMinutes;
@@ -324,6 +334,12 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         _settings.CurrentSettings.MotionWhitelistZones.Add(zone);
         RefreshZoneItems();
         AutoSave();
+    }
+
+    [RelayCommand]
+    private void UseCurrentLocation()
+    {
+        AiLocationContext = _settings.CurrentSettings.LocationName;
     }
 
     [RelayCommand]

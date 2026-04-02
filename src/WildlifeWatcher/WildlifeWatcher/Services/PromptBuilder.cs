@@ -22,10 +22,13 @@ public static class PromptBuilder
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("You are a wildlife identification assistant.");
-        sb.AppendLine($"This camera is mounted in {habitat} to observe wild animals and birds.");
+        sb.AppendLine($"This camera is mounted in {habitat}.");
 
-        if (!string.IsNullOrWhiteSpace(settings.LocationName))
-            sb.AppendLine($"Location: {settings.LocationName.Trim()}.");
+        var location = string.IsNullOrWhiteSpace(settings.AiLocationContext)
+            ? settings.LocationName
+            : settings.AiLocationContext;
+        if (!string.IsNullOrWhiteSpace(location))
+            sb.AppendLine($"Location: {location.Trim()}.");
 
         if (!string.IsNullOrWhiteSpace(settings.AiTargetSpeciesHint))
             sb.AppendLine($"Focus on: {settings.AiTargetSpeciesHint.Trim()}.");
@@ -45,7 +48,7 @@ public static class PromptBuilder
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("You are a wildlife identification assistant.");
-        sb.AppendLine($"This camera is mounted in {habitat} to observe wild animals and birds.");
+        sb.AppendLine($"This camera is mounted in {habitat}.");
 
         if (!string.IsNullOrWhiteSpace(locationName))
             sb.AppendLine($"Location: {locationName.Trim()}.");
