@@ -158,6 +158,13 @@ public partial class DetectionSettingsViewModel : ViewModelBase
                 ? $"Current: {MotionTemporalThreshold} — good balance. Filters static shadows while detecting actual movement. Recommended range: 6–15."
                 : $"Current: {MotionTemporalThreshold} — high threshold; only fast motion detected. May miss slow-moving subjects.";
 
+    public string TemporalCellFractionAdvice =>
+        MotionTemporalCellFraction <= 0.05
+            ? $"Current: {MotionTemporalCellFraction:P0} — very sensitive; fewer pixels need to show motion per cell. Good for small/distant subjects like feeder birds."
+            : MotionTemporalCellFraction <= 0.12
+                ? $"Current: {MotionTemporalCellFraction:P0} — balanced. Recommended range: 5–12%."
+                : $"Current: {MotionTemporalCellFraction:P0} — strict; many pixels must show motion. May miss small subjects.";
+
     public bool ShowDaylightLocationWarning =>
         EnableDaylightDetectionOnly && string.IsNullOrWhiteSpace(_settings.CurrentSettings.LocationName);
 
@@ -185,7 +192,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     partial void OnCooldownSecondsChanged(int value)              => AutoSave();
     partial void OnSpeciesCooldownMinutesChanged(int value)       => AutoSave();
     partial void OnMinConfidenceThresholdChanged(double value)    => AutoSave();
-    partial void OnMotionTemporalCellFractionChanged(double value) => AutoSave();
+    partial void OnMotionTemporalCellFractionChanged(double value) { OnPropertyChanged(nameof(TemporalCellFractionAdvice)); AutoSave(); }
     partial void OnEnablePoiExtractionChanged(bool value)         => AutoSave();
     partial void OnSavePoiDebugImagesChanged(bool value)          => AutoSave();
     partial void OnAiProviderChanged(AiProvider value)            => AutoSave();

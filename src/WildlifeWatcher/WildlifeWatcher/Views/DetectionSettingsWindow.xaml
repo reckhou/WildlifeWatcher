@@ -237,6 +237,18 @@
                        FontSize="10" Foreground="#888" TextWrapping="Wrap"
                        Margin="0,2,0,6"/>
 
+            <TextBlock Text="Temporal cell fraction (0.03 sensitive … 0.25 strict)" Style="{StaticResource Label}"/>
+            <Slider Value="{Binding MotionTemporalCellFraction}"
+                    Minimum="0.03" Maximum="0.25"
+                    TickFrequency="0.01" IsSnapToTickEnabled="True"
+                    TickPlacement="BottomRight"
+                    Margin="0,4,0,0"/>
+            <TextBlock Text="{Binding MotionTemporalCellFraction, StringFormat={}{0:P0}}"
+                       FontSize="11" Foreground="#777" HorizontalAlignment="Right"/>
+            <TextBlock Text="{Binding TemporalCellFractionAdvice}"
+                       FontSize="10" Foreground="#888" TextWrapping="Wrap"
+                       Margin="0,2,0,6"/>
+
             <TextBlock Text="Background model alpha (0.01 slow … 0.20 fast)" Style="{StaticResource Label}"/>
             <Slider Value="{Binding MotionBackgroundAlpha}"
                     Minimum="0.01" Maximum="0.20" TickFrequency="0.01"
