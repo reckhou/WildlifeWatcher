@@ -58,15 +58,21 @@ If `EnablePoiExtraction` is on, this turns the foreground mask into a set of cro
 
    This dual requirement eliminates static false positives (shadows, reflections, camera noise) while preserving detection of low-contrast moving subjects.
 
+   **Exception — Feeder mode zones**: Zones marked `ForegroundOnly` skip the temporal requirement. A cell in such a zone is hot on foreground alone, allowing detection of stationary or slowly-moving subjects (e.g. a bird perched on a feeder).
+
 2. **Mask out cells outside whitelist zones** (if configured).
 
-3. **BFS flood-fill** to group connected hot cells into blobs. Uses 8-neighbor connectivity at sensitivity ≥ 0.3, otherwise 4-neighbor. Small blobs below `minCellCount` are discarded.
+3. **Direct zone crop for feeder zones** — for each `ForegroundOnly` zone with any hot cell, the zone's exact normalized bounds are cropped directly (no BFS, no padding, no size filtering). These get first priority as POI regions. Cells in triggered feeder zones are marked as visited so they don't participate in the normal BFS.
 
-4. **Sort blobs by size, take the top 5.**
+4. **BFS flood-fill** on remaining cells to group connected hot cells into blobs. Uses 8-neighbor connectivity at sensitivity ≥ 0.3, otherwise 4-neighbor. Small blobs below `minCellCount` are discarded.
 
-5. **Map each blob back to the full-resolution frame**: scales the grid coordinates back up, adds 40% padding around the tight bounding box, clamps the padded crop to 25% of the frame in each dimension (to avoid oversized crops), and caps at 640px on the longest side.
+5. **Sort blobs by size**, fill remaining POI slots (after feeder zones) up to the configured cap.
 
-6. **Encode each crop as JPEG at 85% quality.**
+6. **Map each blob back to the full-resolution frame**: scales the grid coordinates back up, adds 40% padding around the tight bounding box, clamps the padded crop to 25% of the frame in each dimension (to avoid oversized crops), and caps at 640px on the longest side.
+
+7. **Merge overlapping regions** — if two POI regions overlap by more than 40% (intersection / smaller area), they are merged into a single union bounding box crop.
+
+8. **Encode each crop as JPEG at 85% quality.**
 
 If 0 regions are found: tick is skipped.
 
@@ -79,11 +85,11 @@ If `EnableBurstCapture` is on and the initial single-frame POI found ≥1 region
 1. Capture `BurstFrameCount` frames at `BurstIntervalMs` intervals (wall-clock scheduled — extraction and processing time is absorbed into the interval, not added on top)
 2. For each frame, compute foreground via `ComputeForeground` and build a **weighted hot-cell grid** (cells store average foreground intensity, not just binary)
 3. Accumulate each grid into a shared **heatmap** (element-wise addition)
-4. After the burst, threshold the heatmap (cells must be hot in ≥2 frames) and BFS-extract regions
-5. For each heatmap region, find the burst frame where that region's cells had peak total intensity
-6. Crop from the best frame per region
+4. **Feeder zones first**: for each `ForegroundOnly` zone with heatmap activity, find the burst frame with peak intensity in that zone and crop directly from zone bounds. Zero out the zone's heatmap cells to prevent double-counting.
+5. After feeder zones, threshold the remaining heatmap (cells must be hot in ≥2 frames) and BFS-extract regions to fill remaining POI slots.
+6. For each heatmap region, find the burst frame where that region's cells had peak total intensity and crop from the best frame.
 
-The burst replaces the initial single-frame POI regions with heatmap-derived regions. This filters out transient noise (hot in 1 frame only) and selects the sharpest frame for each detected animal.
+The burst replaces the initial single-frame POI regions with heatmap-derived regions. This filters out transient noise (hot in 1 frame only) and selects the sharpest frame for each detected animal. Feeder zones always get first priority in both single-frame and burst paths.
 
 ---
 
@@ -169,9 +175,10 @@ detection loop (every FrameExtractionIntervalSeconds)
   → [gate: training complete?]
   → trigger daily sunrise/sunset refresh (fire-and-forget)
   → [gate: daylight window?]           ← SunriseSunsetService
-  → extract POI crops             ← PointOfInterestService BFS on hot-cell grid
+  → extract POI crops             ← feeder zones (direct crop) + BFS on hot-cell grid
+  → merge overlapping regions     ← >40% overlap → union bbox
   → [gate: POI count > 0?]
-  → [optional: burst capture]     ← heatmap accumulation over N frames
+  → [optional: burst capture]     ← feeder zones first, then heatmap over N frames
   → [gate: cooldown expired?]
   → send to AI (POI crops or full frame)
   → filter by confidence

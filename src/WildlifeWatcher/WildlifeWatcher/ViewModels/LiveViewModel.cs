@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LibVLCSharp.Shared;
@@ -44,6 +45,7 @@ public partial class LiveViewModel : ViewModelBase
     [ObservableProperty] private string _modelDataAgeText     = string.Empty;
     [ObservableProperty] private string _daylightStatusText   = string.Empty;
     [ObservableProperty] private string _daylightFallbackText = string.Empty;
+    [ObservableProperty] private BitmapSource? _hotCellOverlaySource;
 
     public MediaPlayer MediaPlayer => _camera.MediaPlayer;
     public ObservableCollection<DetectionEvent>   RecentDetections { get; } = new();
@@ -74,6 +76,7 @@ public partial class LiveViewModel : ViewModelBase
         _recognitionLoop.IsAnalyzingChanged      += OnIsAnalyzingChanged;
         _recognitionLoop.PoiRegionsDetected      += OnPoiRegionsDetected;
         _recognitionLoop.BurstProgressChanged    += OnBurstProgressChanged;
+        _recognitionLoop.HotCellDebugComputed    += OnHotCellDebugComputed;
         _backgroundModel.TrainingProgressChanged += OnTrainingProgressChanged;
         _recognitionLoop.DaylightWindowChanged   += OnDaylightWindowChanged;
         InMemoryLogSink.EntryAdded               += OnLogEntryAdded;
@@ -255,7 +258,7 @@ public partial class LiveViewModel : ViewModelBase
             IsConnected           = connected;
             StatusText            = connected ? "Connected" : "Disconnected";
             ConnectionButtonText  = connected ? "Disconnect" : "Connect";
-            if (!connected) PoiOverlays.Clear();
+            if (!connected) { PoiOverlays.Clear(); HotCellOverlaySource = null; }
         });
     }
 
@@ -283,6 +286,43 @@ public partial class LiveViewModel : ViewModelBase
             foreach (var r in regions)
                 PoiOverlays.Add(PoiOverlayItem.FromRegion(r));
         });
+    }
+
+    private void OnHotCellDebugComputed(object? sender, HotCellDebugData? data)
+    {
+        if (data is null)
+        {
+            Application.Current.Dispatcher.InvokeAsync(() => HotCellOverlaySource = null);
+            return;
+        }
+
+        int cols = data.GridCols;
+        int rows = data.GridRows;
+        var pixels = new byte[rows * cols * 4]; // BGRA32
+
+        for (int r = 0; r < rows; r++)
+        for (int c = 0; c < cols; c++)
+        {
+            int i = (r * cols + c) * 4;
+            switch (data.CellState[r, c])
+            {
+                case 3: // both foreground + temporal — pink (#FF4081 at ~53% opacity)
+                case 4: // triggered feeder zone — pink
+                    pixels[i] = 0x81; pixels[i + 1] = 0x40; pixels[i + 2] = 0xFF; pixels[i + 3] = 0x88;
+                    break;
+                case 1: // foreground only — amber (#FFC107 at ~53% opacity)
+                    pixels[i] = 0x07; pixels[i + 1] = 0xC1; pixels[i + 2] = 0xFF; pixels[i + 3] = 0x88;
+                    break;
+                case 2: // temporal only — blue (#2196F3 at ~27% opacity)
+                    pixels[i] = 0xF3; pixels[i + 1] = 0x96; pixels[i + 2] = 0x21; pixels[i + 3] = 0x44;
+                    break;
+                // case 0: transparent — already zeroed
+            }
+        }
+
+        var bmp = BitmapSource.Create(cols, rows, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, pixels, cols * 4);
+        bmp.Freeze();
+        Application.Current.Dispatcher.InvokeAsync(() => HotCellOverlaySource = bmp);
     }
 
     private void OnBurstProgressChanged(object? sender, (int completed, int total) e)
@@ -332,6 +372,9 @@ public partial class LiveViewModel : ViewModelBase
 
     private void OnSettingsChanged(object? sender, AppConfiguration settings)
     {
+        if (!settings.ShowHotCellDebugOverlay)
+            Application.Current.Dispatcher.InvokeAsync(() => HotCellOverlaySource = null);
+
         bool allowed = _daylightWindow.IsDetectionAllowed(settings);
         OnDaylightWindowChanged(this, allowed);
     }

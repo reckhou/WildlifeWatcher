@@ -19,6 +19,9 @@ public class PointOfInterestService : IPointOfInterestService
     private int _scaleWidth;
     private int _scaleHeight;
 
+    /// <inheritdoc/>
+    public HotCellDebugData? LastHotCellDebug { get; private set; }
+
     private const double PadFraction      = 0.40; // padding added around tight bounding box
     private const double MaxBlobFraction  = 0.20; // skip tight bbox larger than 20% of frame in either dimension
     private const double MaxCropFraction  = 0.25; // clamp padded crop to 25% of frame in either dimension
@@ -64,6 +67,7 @@ public class PointOfInterestService : IPointOfInterestService
 
         // ── 1. Build hot-cell grid ──────────────────────────────────────────
         var hotCells = new bool[_gridRows, _gridCols];
+        var debugState = new byte[_gridRows, _gridCols];
         const int cellPixels = CellPixelSize * CellPixelSize;
         for (int row = 0; row < _gridRows; row++)
         {
@@ -81,9 +85,28 @@ public class PointOfInterestService : IPointOfInterestService
                 // Both conditions must be met: foreground diff AND temporal motion
                 bool hasForeground = foregroundChanged >= cellPixels * cellHotFraction;
                 bool hasTemporal = temporalDelta != null && temporalChanged >= cellPixels * temporalCellFraction;
-                hotCells[row, col] = hasForeground && hasTemporal;
+
+                // Foreground-only zones: skip temporal requirement for cells inside them
+                bool isForegroundOnlyZone = false;
+                if (hasForeground && !hasTemporal && whitelistZones is { Count: > 0 })
+                {
+                    double nx = (col + 0.5) / _gridCols;
+                    double ny = (row + 0.5) / _gridRows;
+                    isForegroundOnlyZone = whitelistZones.Any(z =>
+                        z.ForegroundOnly &&
+                        nx >= z.NLeft && nx <= z.NLeft + z.NWidth &&
+                        ny >= z.NTop  && ny <= z.NTop  + z.NHeight);
+                }
+
+                hotCells[row, col] = (hasForeground && hasTemporal) || isForegroundOnlyZone;
+                // Debug: 0=cold, 1=foreground only, 2=temporal only, 3=both
+                debugState[row, col] = (byte)((hasForeground ? 1 : 0) | (hasTemporal ? 2 : 0));
             }
         }
+        LastHotCellDebug = new HotCellDebugData
+        {
+            GridCols = _gridCols, GridRows = _gridRows, CellState = debugState
+        };
 
         // ── 1b. Mask hot cells outside whitelist zones ──────────────────────
         if (whitelistZones is { Count: > 0 })
@@ -101,10 +124,43 @@ public class PointOfInterestService : IPointOfInterestService
             }
         }
 
-        // ── 2. BFS connected components ────────────────────────────────────
-        var visited    = new bool[_gridRows, _gridCols];
-        var components = new List<List<(int r, int c)>>();
+        // ── 2. Direct zone crop + BFS ──────────────────────────────────────
+        var visited = new bool[_gridRows, _gridCols];
 
+        // 2a. ForegroundOnly zones: if ANY hot cell exists, crop the zone bounds
+        //     directly — bypasses BFS entirely, so no blob merging / size filtering.
+        var priorityZones = new List<MotionZone>();
+        if (whitelistZones is { Count: > 0 })
+        {
+            foreach (var zone in whitelistZones.Where(z => z.ForegroundOnly))
+            {
+                // Floor for min, ceiling for max — include cells that partially overlap zone
+                int zMinCol = Math.Clamp((int)Math.Floor(zone.NLeft * _gridCols), 0, _gridCols - 1);
+                int zMaxCol = Math.Clamp((int)Math.Ceiling((zone.NLeft + zone.NWidth) * _gridCols) - 1, 0, _gridCols - 1);
+                int zMinRow = Math.Clamp((int)Math.Floor(zone.NTop * _gridRows), 0, _gridRows - 1);
+                int zMaxRow = Math.Clamp((int)Math.Ceiling((zone.NTop + zone.NHeight) * _gridRows) - 1, 0, _gridRows - 1);
+
+                bool hasActivity = false;
+                for (int r = zMinRow; r <= zMaxRow && !hasActivity; r++)
+                for (int c = zMinCol; c <= zMaxCol && !hasActivity; c++)
+                    if (hotCells[r, c]) hasActivity = true;
+
+                if (hasActivity)
+                {
+                    priorityZones.Add(zone);
+                    for (int r = zMinRow; r <= zMaxRow; r++)
+                    for (int c = zMinCol; c <= zMaxCol; c++)
+                    {
+                        visited[r, c] = true;
+                        if (debugState[r, c] > 0)
+                            debugState[r, c] = 4;
+                    }
+                }
+            }
+        }
+
+        // 2b. Normal BFS for remaining cells (non-ForegroundOnly zones)
+        var normalComponents = new List<List<(int r, int c)>>();
         for (int r = 0; r < _gridRows; r++)
         for (int c = 0; c < _gridCols; c++)
         {
@@ -138,17 +194,14 @@ public class PointOfInterestService : IPointOfInterestService
             }
 
             if (component.Count >= minCellCount)
-                components.Add(component);
+                normalComponents.Add(component);
         }
 
-        if (components.Count == 0)
+        if (priorityZones.Count == 0 && normalComponents.Count == 0)
             return Array.Empty<PoiRegion>();
 
-        // Sort by size descending, take top N
-        components.Sort((a, b) => b.Count.CompareTo(a.Count));
+        normalComponents.Sort((a, b) => b.Count.CompareTo(a.Count));
         int cap = Math.Clamp(maxRegions, 3, 10);
-        if (components.Count > cap)
-            components.RemoveRange(cap, components.Count - cap);
 
         // ── 3. Decode full-res frame once (SkiaSharp — no UI thread needed) ──
         using var fullRes = SKBitmap.Decode(currentFrame);
@@ -158,21 +211,35 @@ public class PointOfInterestService : IPointOfInterestService
         int imgW = fullRes.Width;
         int imgH = fullRes.Height;
 
-        // ── 4. Map each component to a padded crop ──────────────────────────
-        var regions = new List<PoiRegion>(components.Count);
+        // ── 4. Create POI regions ──────────────────────────────────────────
+        var regions = new List<PoiRegion>();
 
-        for (int i = 0; i < components.Count; i++)
+        // 4a. Priority: crop ForegroundOnly zones using exact normalized coords
+        //     (no grid quantization, no padding, no MaxCropFraction clamp)
+        foreach (var zone in priorityZones)
         {
-            var comp   = components[i];
+            var region = CropZoneDirect(fullRes, imgW, imgH, zone, regions.Count + 1);
+            if (region != null)
+                regions.Add(region);
+        }
+
+        // 4b. Fill remaining slots with normal BFS blobs
+        for (int i = 0; i < normalComponents.Count && regions.Count < cap; i++)
+        {
+            var comp   = normalComponents[i];
             int minRow = comp.Min(x => x.r);
             int maxRow = comp.Max(x => x.r);
             int minCol = comp.Min(x => x.c);
             int maxCol = comp.Max(x => x.c);
 
-            var region = CropRegionFromComponent(fullRes, imgW, imgH, minRow, maxRow, minCol, maxCol, regions.Count + 1);
+            var region = CropRegionFromComponent(fullRes, imgW, imgH,
+                minRow, maxRow, minCol, maxCol, regions.Count + 1);
             if (region != null)
                 regions.Add(region);
         }
+
+        // ── 5. Merge overlapping regions (>40% overlap by smaller area) ────
+        MergeOverlappingRegions(regions, fullRes, imgW, imgH);
 
         return regions;
     }
@@ -181,15 +248,17 @@ public class PointOfInterestService : IPointOfInterestService
     /// Crop a region from a full-resolution frame, given grid-space bounding box.
     /// Reuses existing padding/clamping/encoding logic.
     /// </summary>
-    public PoiRegion? CropRegion(byte[] frame, int minRow, int maxRow, int minCol, int maxCol, int index)
+    public PoiRegion? CropRegion(byte[] frame, int minRow, int maxRow, int minCol, int maxCol, int index,
+        double maxBlobFrac = MaxBlobFraction, double padFraction = PadFraction)
     {
         using var fullRes = SKBitmap.Decode(frame);
         if (fullRes == null) return null;
-        return CropRegionFromComponent(fullRes, fullRes.Width, fullRes.Height, minRow, maxRow, minCol, maxCol, index);
+        return CropRegionFromComponent(fullRes, fullRes.Width, fullRes.Height, minRow, maxRow, minCol, maxCol, index, maxBlobFrac, padFraction);
     }
 
     private PoiRegion? CropRegionFromComponent(SKBitmap fullRes, int imgW, int imgH,
-        int minRow, int maxRow, int minCol, int maxCol, int index)
+        int minRow, int maxRow, int minCol, int maxCol, int index,
+        double maxBlobFrac = MaxBlobFraction, double padFraction = PadFraction)
     {
         double scaleX = (double)imgW / _scaleWidth;
         double scaleY = (double)imgH / _scaleHeight;
@@ -199,8 +268,8 @@ public class PointOfInterestService : IPointOfInterestService
         double x2 = (maxCol + 1) * CellPixelSize * scaleX;
         double y2 = (maxRow + 1) * CellPixelSize * scaleY;
 
-        double padX = (x2 - x1) * PadFraction;
-        double padY = (y2 - y1) * PadFraction;
+        double padX = (x2 - x1) * padFraction;
+        double padY = (y2 - y1) * padFraction;
 
         int cx1 = (int)Math.Max(0,    x1 - padX);
         int cy1 = (int)Math.Max(0,    y1 - padY);
@@ -232,7 +301,7 @@ public class PointOfInterestService : IPointOfInterestService
         // Skip blobs whose tight bounding box is too large to be a single bird
         double tightW = x2 - x1;
         double tightH = y2 - y1;
-        if (tightW > imgW * MaxBlobFraction || tightH > imgH * MaxBlobFraction) return null;
+        if (tightW > imgW * maxBlobFrac || tightH > imgH * maxBlobFrac) return null;
 
         // Clamp padded crop to max size, centered on the tight bbox centroid
         int maxCropW = (int)(imgW * MaxCropFraction);
@@ -297,7 +366,19 @@ public class PointOfInterestService : IPointOfInterestService
 
                 bool hasForeground = foregroundChanged >= cellPixels * cellHotFraction;
                 bool hasTemporal = temporalDelta != null && temporalChanged >= cellPixels * temporalCellFraction;
-                if (hasForeground && hasTemporal && foregroundChanged > 0)
+
+                bool isForegroundOnlyZone = false;
+                if (hasForeground && !hasTemporal && whitelistZones is { Count: > 0 })
+                {
+                    double nx = (col + 0.5) / _gridCols;
+                    double ny = (row + 0.5) / _gridRows;
+                    isForegroundOnlyZone = whitelistZones.Any(z =>
+                        z.ForegroundOnly &&
+                        nx >= z.NLeft && nx <= z.NLeft + z.NWidth &&
+                        ny >= z.NTop  && ny <= z.NTop  + z.NHeight);
+                }
+
+                if (((hasForeground && hasTemporal) || isForegroundOnlyZone) && foregroundChanged > 0)
                     grid[row, col] = intensitySum / foregroundChanged;
             }
         }
@@ -418,7 +499,92 @@ public class PointOfInterestService : IPointOfInterestService
         return results;
     }
 
+    /// <summary>
+    /// Crop a region using the zone's exact normalized coordinates — no grid
+    /// quantization, no padding, no MaxCropFraction clamp.
+    /// </summary>
+    public PoiRegion? CropZoneDirect(byte[] frame, MotionZone zone, int index)
+    {
+        using var fullRes = SKBitmap.Decode(frame);
+        if (fullRes == null) return null;
+        return CropZoneDirect(fullRes, fullRes.Width, fullRes.Height, zone, index);
+    }
+
+    private PoiRegion? CropZoneDirect(SKBitmap fullRes, int imgW, int imgH, MotionZone zone, int index)
+    {
+        int cx = Math.Clamp((int)(zone.NLeft * imgW), 0, imgW - 1);
+        int cy = Math.Clamp((int)(zone.NTop * imgH), 0, imgH - 1);
+        int cw = Math.Min((int)(zone.NWidth * imgW), imgW - cx);
+        int ch = Math.Min((int)(zone.NHeight * imgH), imgH - cy);
+        if (cw < 20 || ch < 20) return null;
+
+        byte[] jpeg = CropAndEncode(fullRes, cx, cy, cw, ch);
+        return new PoiRegion(
+            (double)cx / imgW, (double)cy / imgH,
+            (double)cw / imgW, (double)ch / imgH,
+            jpeg, index);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private const double MergeOverlapThreshold = 0.40;
+
+    /// <summary>
+    /// Merge regions that overlap by more than 40% (intersection / smaller area).
+    /// Mutates the list in-place: merged pairs become a single union-bbox crop.
+    /// </summary>
+    private static void MergeOverlappingRegions(List<PoiRegion> regions, SKBitmap fullRes, int imgW, int imgH)
+    {
+        if (regions.Count < 2) return;
+
+        bool merged = true;
+        while (merged)
+        {
+            merged = false;
+            for (int i = 0; i < regions.Count && !merged; i++)
+            for (int j = i + 1; j < regions.Count && !merged; j++)
+            {
+                var a = regions[i];
+                var b = regions[j];
+
+                double intL = Math.Max(a.NLeft, b.NLeft);
+                double intT = Math.Max(a.NTop, b.NTop);
+                double intR = Math.Min(a.NLeft + a.NWidth, b.NLeft + b.NWidth);
+                double intB = Math.Min(a.NTop + a.NHeight, b.NTop + b.NHeight);
+                if (intR <= intL || intB <= intT) continue;
+
+                double intArea = (intR - intL) * (intB - intT);
+                double smaller = Math.Min(a.NWidth * a.NHeight, b.NWidth * b.NHeight);
+                if (intArea / smaller < MergeOverlapThreshold) continue;
+
+                // Union bounding box
+                double uL = Math.Min(a.NLeft, b.NLeft);
+                double uT = Math.Min(a.NTop, b.NTop);
+                double uR = Math.Max(a.NLeft + a.NWidth, b.NLeft + b.NWidth);
+                double uB = Math.Max(a.NTop + a.NHeight, b.NTop + b.NHeight);
+
+                int cx = Math.Max(0, (int)(uL * imgW));
+                int cy = Math.Max(0, (int)(uT * imgH));
+                int cw = Math.Min(imgW - cx, (int)((uR - uL) * imgW));
+                int ch = Math.Min(imgH - cy, (int)((uB - uT) * imgH));
+                if (cw < 20 || ch < 20) continue;
+
+                byte[] jpeg = CropAndEncode(fullRes, cx, cy, cw, ch);
+                var union = new PoiRegion(
+                    (double)cx / imgW, (double)cy / imgH,
+                    (double)cw / imgW, (double)ch / imgH,
+                    jpeg, Math.Min(a.Index, b.Index));
+
+                regions.RemoveAt(j);
+                regions[i] = union;
+                merged = true;
+            }
+        }
+
+        // Re-index
+        for (int i = 0; i < regions.Count; i++)
+            regions[i] = regions[i] with { Index = i + 1 };
+    }
 
     private static byte[] CropAndEncode(SKBitmap source, int x, int y, int w, int h)
     {

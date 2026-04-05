@@ -44,6 +44,7 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
     public event EventHandler<IReadOnlyList<PoiRegion>>?     PoiRegionsDetected;
     public event EventHandler<bool>?                         DaylightWindowChanged;
     public event EventHandler<(int completed, int total)>?   BurstProgressChanged;
+    public event EventHandler<HotCellDebugData?>?            HotCellDebugComputed;
 
     public RecognitionLoopService(
         ICameraService              camera,
@@ -253,8 +254,10 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
         var settings = _settings.CurrentSettings;
 
-        // Clear POI overlay at the start of each tick
+        // Clear overlays at the start of each tick
         PoiRegionsDetected?.Invoke(this, Array.Empty<PoiRegion>());
+        if (!settings.ShowHotCellDebugOverlay)
+            HotCellDebugComputed?.Invoke(this, null);
 
         // ── Ensure services are initialized ─────────────────────────────
         EnsureInitialized(currentFrame);
@@ -298,6 +301,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
             poiRegions = _poi.ExtractRegions(fg, currentFrame, zones, settings.MotionPixelThreshold, settings.PoiSensitivity,
                 temporalDelta, settings.MotionTemporalThreshold, settings.MotionTemporalCellFraction, settings.MaxPoiRegions);
             _logger.LogInformation("POI extraction: {Count} region(s) found", poiRegions.Count);
+
+            if (settings.ShowHotCellDebugOverlay)
+                HotCellDebugComputed?.Invoke(this, _poi.LastHotCellDebug);
 
             if (poiRegions.Count == 0)
             {
@@ -467,21 +473,70 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         if (burstFrames.Count == 0)
             return (Array.Empty<PoiRegion>(), null);
 
-        // Extract heatmap regions
-        var heatmapRegions = poiSvc.ExtractHeatmapRegions(heatmap, minHitCount: 2, settings.PoiSensitivity, settings.MaxPoiRegions);
-        _logger.LogInformation("Burst complete: {Count} heatmap region(s) from {Frames} frames",
-            heatmapRegions.Count, burstFrames.Count);
-
-        if (heatmapRegions.Count == 0)
-            return (Array.Empty<PoiRegion>(), null);
-
-        // For each region, find the burst frame where the region's cells had highest total intensity,
-        // then crop from that frame
         var regions = new List<PoiRegion>();
         byte[]? overallBestFrame = null;
         float overallBestIntensity = 0;
+        int cap = Math.Clamp(settings.MaxPoiRegions, 3, 10);
 
-        for (int ri = 0; ri < heatmapRegions.Count; ri++)
+        // ── Priority: ForegroundOnly zones — direct zone crop from best burst frame ──
+        if (zones is { Count: > 0 })
+        {
+            foreach (var zone in zones.Where(z => z.ForegroundOnly))
+            {
+                int zMinCol = Math.Clamp((int)(zone.NLeft * gridCols), 0, gridCols - 1);
+                int zMaxCol = Math.Clamp((int)((zone.NLeft + zone.NWidth) * gridCols), 0, gridCols - 1);
+                int zMinRow = Math.Clamp((int)(zone.NTop * gridRows), 0, gridRows - 1);
+                int zMaxRow = Math.Clamp((int)((zone.NTop + zone.NHeight) * gridRows), 0, gridRows - 1);
+
+                bool hasActivity = false;
+                for (int r = zMinRow; r <= zMaxRow && !hasActivity; r++)
+                for (int c = zMinCol; c <= zMaxCol && !hasActivity; c++)
+                    if (heatmap[r, c] > 0) hasActivity = true;
+
+                if (!hasActivity) continue;
+
+                // Find best burst frame for this zone
+                float bestIntensity = 0;
+                int bestIdx = 0;
+                for (int fi = 0; fi < burstFrames.Count; fi++)
+                {
+                    float total = 0;
+                    var cells = burstFrames[fi].hotCells;
+                    for (int r = zMinRow; r <= zMaxRow; r++)
+                    for (int c = zMinCol; c <= zMaxCol; c++)
+                        total += cells[r, c];
+                    if (total > bestIntensity)
+                    {
+                        bestIntensity = total;
+                        bestIdx = fi;
+                    }
+                }
+
+                var bestFrame = burstFrames[bestIdx].frame;
+                var crop = poiSvc.CropZoneDirect(bestFrame, zone, regions.Count + 1);
+                if (crop != null)
+                {
+                    regions.Add(crop);
+                    if (bestIntensity > overallBestIntensity)
+                    {
+                        overallBestIntensity = bestIntensity;
+                        overallBestFrame = bestFrame;
+                    }
+                }
+
+                // Zero out zone cells so ExtractHeatmapRegions won't double-count
+                for (int r = zMinRow; r <= zMaxRow; r++)
+                for (int c = zMinCol; c <= zMaxCol; c++)
+                    heatmap[r, c] = 0;
+            }
+        }
+
+        // ── Heatmap BFS for remaining (non-priority) regions ──
+        var heatmapRegions = poiSvc.ExtractHeatmapRegions(heatmap, minHitCount: 2, settings.PoiSensitivity, settings.MaxPoiRegions);
+        _logger.LogInformation("Burst complete: {PriorityCount} priority + {HeatmapCount} heatmap region(s) from {Frames} frames",
+            regions.Count, heatmapRegions.Count, burstFrames.Count);
+
+        for (int ri = 0; ri < heatmapRegions.Count && regions.Count < cap; ri++)
         {
             var (minRow, maxRow, minCol, maxCol, _) = heatmapRegions[ri];
 
@@ -557,6 +612,9 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
                 settings.PoiSensitivity, temporalDelta, settings.MotionTemporalThreshold,
                 settings.MotionTemporalCellFraction, settings.MaxPoiRegions);
             _logger.LogInformation("Test POI extraction: {Count} region(s) found", regions.Count);
+
+            if (settings.ShowHotCellDebugOverlay)
+                HotCellDebugComputed?.Invoke(this, _poi.LastHotCellDebug);
 
             // Run burst if enabled and initial POI found regions
             if (settings.EnableBurstCapture && regions.Count > 0)

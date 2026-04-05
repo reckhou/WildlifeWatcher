@@ -110,6 +110,12 @@
                       IsChecked="{Binding SavePoiDebugImages}"
                       FontSize="12" Foreground="#444" Margin="0,4,0,4"/>
 
+            <CheckBox Content="Show hot-cell debug overlay on live view"
+                      IsChecked="{Binding ShowHotCellDebugOverlay}"
+                      FontSize="12" Foreground="#444" Margin="0,4,0,0"/>
+            <TextBlock Text="Pink = hot (foreground + temporal, or feeder zone triggered)  ·  Amber = foreground only  ·  Blue = temporal only"
+                       FontSize="10" Foreground="#888" TextWrapping="Wrap" Margin="20,0,0,4"/>
+
             <TextBlock Text="POI sensitivity (0 = conservative, 1 = aggressive)" Style="{StaticResource Label}"/>
             <Slider Value="{Binding PoiSensitivity}"
                     Minimum="0" Maximum="1"
@@ -337,7 +343,31 @@
             </Border>
 
             <TextBlock Text="Click and drag on the image above to add a zone."
-                       FontSize="10" Foreground="#888" Margin="0,2,0,8"/>
+                       FontSize="10" Foreground="#888" Margin="0,2,0,4"/>
+
+            <!-- Zone list with foreground-only toggles -->
+            <ItemsControl ItemsSource="{Binding MotionZones}" Margin="0,0,0,4">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                            <TextBlock Text="{Binding Index, StringFormat=Zone {0}}"
+                                       FontSize="11" Foreground="#666" Width="50"
+                                       VerticalAlignment="Center"/>
+                            <CheckBox IsChecked="{Binding ForegroundOnly}"
+                                      Content="Feeder mode"
+                                      FontSize="11" Foreground="#555"
+                                      VerticalAlignment="Center"/>
+                            <Button Content="✕" FontSize="10" Padding="4,0" Margin="8,0,0,0"
+                                    Background="Transparent" Foreground="#CC3333"
+                                    BorderThickness="0" Cursor="Hand"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding DataContext.RemoveZoneCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <Button Content="Clear All Zones"
                     Command="{Binding ClearZonesCommand}"

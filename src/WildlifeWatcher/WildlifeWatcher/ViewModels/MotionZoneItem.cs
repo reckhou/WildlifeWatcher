@@ -11,6 +11,7 @@ public partial class MotionZoneItem : ObservableObject
     public double NWidth      { get; init; }
     public double NHeight     { get; init; }
 
+    [ObservableProperty] private bool   _foregroundOnly;
     [ObservableProperty] private double _canvasLeft;
     [ObservableProperty] private double _canvasTop;
     [ObservableProperty] private double _canvasWidth;
@@ -18,12 +19,13 @@ public partial class MotionZoneItem : ObservableObject
 
     public static MotionZoneItem From(MotionZone z, int index, double cw, double ch) => new()
     {
-        Index        = index,
-        NLeft        = z.NLeft,  NTop     = z.NTop,
-        NWidth       = z.NWidth, NHeight  = z.NHeight,
-        CanvasLeft   = z.NLeft   * cw,  CanvasTop    = z.NTop    * ch,
-        CanvasWidth  = z.NWidth  * cw,  CanvasHeight = z.NHeight * ch,
+        Index          = index,
+        NLeft          = z.NLeft,  NTop     = z.NTop,
+        NWidth         = z.NWidth, NHeight  = z.NHeight,
+        ForegroundOnly = z.ForegroundOnly,
+        CanvasLeft     = z.NLeft   * cw,  CanvasTop    = z.NTop    * ch,
+        CanvasWidth    = z.NWidth  * cw,  CanvasHeight = z.NHeight * ch,
     };
 
-    public MotionZone ToMotionZone() => new(NLeft, NTop, NWidth, NHeight);
+    public MotionZone ToMotionZone() => new(NLeft, NTop, NWidth, NHeight, ForegroundOnly);
 }

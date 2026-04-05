@@ -53,6 +53,13 @@ public class AppConfiguration
     public bool SavePoiDebugImages { get; set; } = true;
 
     /// <summary>
+    /// When true, renders a colour-coded grid overlay on the live view showing which cells
+    /// pass the foreground condition, temporal condition, or both.
+    /// Green = both (hot), amber = foreground only, blue = temporal only.
+    /// </summary>
+    public bool ShowHotCellDebugOverlay { get; set; } = false;
+
+    /// <summary>
     /// Controls how aggressively POI extraction isolates small regions.
     /// 0.0 = conservative (large subjects only), 1.0 = aggressive (small/distant subjects).
     /// </summary>

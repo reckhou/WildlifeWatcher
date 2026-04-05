@@ -34,6 +34,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
 
     [ObservableProperty] private bool   _enablePoiExtraction = true;
     [ObservableProperty] private bool   _savePoiDebugImages  = true;
+    [ObservableProperty] private bool   _showHotCellDebugOverlay;
     [ObservableProperty] private double _poiSensitivity      = 0.5;
     [ObservableProperty] private int    _maxPoiRegions       = 5;
 
@@ -195,6 +196,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
     partial void OnMotionTemporalCellFractionChanged(double value) { OnPropertyChanged(nameof(TemporalCellFractionAdvice)); AutoSave(); }
     partial void OnEnablePoiExtractionChanged(bool value)         => AutoSave();
     partial void OnSavePoiDebugImagesChanged(bool value)          => AutoSave();
+    partial void OnShowHotCellDebugOverlayChanged(bool value)     => AutoSave();
     partial void OnAiProviderChanged(AiProvider value)            => AutoSave();
     partial void OnClaudeModelChanged(string value)               => AutoSave();
     partial void OnGeminiModelChanged(string value)               => AutoSave();
@@ -241,6 +243,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
             MotionTemporalCellFraction   = s.MotionTemporalCellFraction;
             EnablePoiExtraction          = s.EnablePoiExtraction;
             SavePoiDebugImages           = s.SavePoiDebugImages;
+            ShowHotCellDebugOverlay      = s.ShowHotCellDebugOverlay;
             PoiSensitivity               = s.PoiSensitivity;
             MaxPoiRegions                = s.MaxPoiRegions;
             PoiCellSizePixels            = s.PoiCellSizePixels;
@@ -292,6 +295,7 @@ public partial class DetectionSettingsViewModel : ViewModelBase
         s.MotionTemporalCellFraction     = MotionTemporalCellFraction;
         s.EnablePoiExtraction            = EnablePoiExtraction;
         s.SavePoiDebugImages             = SavePoiDebugImages;
+        s.ShowHotCellDebugOverlay        = ShowHotCellDebugOverlay;
         s.PoiSensitivity                 = PoiSensitivity;
         s.MaxPoiRegions                  = MaxPoiRegions;
         s.PoiCellSizePixels              = PoiCellSizePixels;
@@ -330,10 +334,22 @@ public partial class DetectionSettingsViewModel : ViewModelBase
 
     private void RefreshZoneItems()
     {
+        foreach (var old in MotionZones)
+            old.PropertyChanged -= OnZoneItemPropertyChanged;
         MotionZones.Clear();
         var zones = _settings.CurrentSettings.MotionWhitelistZones;
         for (int i = 0; i < zones.Count; i++)
-            MotionZones.Add(MotionZoneItem.From(zones[i], i + 1, ZoneCanvasW, ZoneCanvasH));
+        {
+            var item = MotionZoneItem.From(zones[i], i + 1, ZoneCanvasW, ZoneCanvasH);
+            item.PropertyChanged += OnZoneItemPropertyChanged;
+            MotionZones.Add(item);
+        }
+    }
+
+    private void OnZoneItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MotionZoneItem.ForegroundOnly))
+            AutoSave();
     }
 
     public void AddZone(MotionZone zone)

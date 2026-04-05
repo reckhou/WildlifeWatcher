@@ -24,6 +24,12 @@ public interface IRecognitionLoopService
     event EventHandler<(int completed, int total)>? BurstProgressChanged;
 
     /// <summary>
+    /// Fired each tick with the hot-cell debug grid when ShowHotCellDebugOverlay is enabled.
+    /// Null payload clears the overlay.
+    /// </summary>
+    event EventHandler<HotCellDebugData?>? HotCellDebugComputed;
+
+    /// <summary>
     /// Runs a single POI detection tick (frame extract → background model → POI extraction → save debug crops).
     /// Skips AI recognition. Returns a summary string describing what was found and saved.
     /// </summary>

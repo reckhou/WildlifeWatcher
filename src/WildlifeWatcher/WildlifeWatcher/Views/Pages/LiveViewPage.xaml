@@ -63,6 +63,18 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Hot-cell debug overlay — grid-resolution bitmap stretched over video.
+                             NearestNeighbor keeps cells as sharp blocks instead of blurred blobs. -->
+                        <Viewbox Stretch="Uniform" IsHitTestVisible="False"
+                                 Visibility="{Binding HotCellOverlaySource,
+                                              Converter={StaticResource NullToCollapsedConverter}}">
+                            <Grid Width="1600" Height="900">
+                                <Image Source="{Binding HotCellOverlaySource}"
+                                       Stretch="Fill"
+                                       RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            </Grid>
+                        </Viewbox>
+
                         <!-- POI overlay — fixed 1600×900 canvas scaled via Viewbox.
                              Stretch=Uniform matches LibVLC's own aspect-ratio-preserving render,
                              so the overlay tiles exactly over the visible video pixels. -->

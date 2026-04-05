@@ -10,6 +10,12 @@ public interface IPointOfInterestService
     void Initialize(int gridCols, int gridRows);
 
     /// <summary>
+    /// Debug snapshot of the most recent hot-cell grid from ExtractRegions.
+    /// Null until the first call to ExtractRegions.
+    /// </summary>
+    HotCellDebugData? LastHotCellDebug { get; }
+
+    /// <summary>
     /// Uses the foreground mask from the background model to find hotspot regions,
     /// then returns padded JPEG crops from the full-resolution current frame.
     /// Returns an empty list when motion is too diffuse to isolate distinct hotspots.
