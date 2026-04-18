@@ -1,7 +1,5 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Anthropic.SDK;
 using Anthropic.SDK.Messaging;
 using Microsoft.Extensions.Logging;
@@ -135,27 +133,39 @@ public class ClaudeRecognitionService : IAiRecognitionService
 
     // ── Image helpers ─────────────────────────────────────────────────────
 
+    // SkiaSharp — avoids WPF's BitmapFrame/JpegBitmapEncoder pipeline, which
+    // creates a Dispatcher + hidden HWND on every thread-pool worker that runs
+    // it. Those HWNDs leak and exhaust the process USER-handle quota after
+    // enough background-thread calls.
     private static (byte[] bytes, string mediaType) ResizeAndCompress(byte[] pngBytes)
     {
         const int MaxDimension = 1280;
 
-        using var ms  = new System.IO.MemoryStream(pngBytes);
-        var bitmap    = BitmapFrame.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        using var source = SkiaSharp.SKBitmap.Decode(pngBytes)
+            ?? throw new InvalidOperationException("Failed to decode PNG");
 
-        BitmapSource source = bitmap;
-        if (bitmap.PixelWidth > MaxDimension || bitmap.PixelHeight > MaxDimension)
+        SkiaSharp.SKBitmap toEncode = source;
+        SkiaSharp.SKBitmap? scaled  = null;
+        try
         {
-            var scale = Math.Min((double)MaxDimension / bitmap.PixelWidth,
-                                 (double)MaxDimension / bitmap.PixelHeight);
-            source    = new TransformedBitmap(bitmap, new ScaleTransform(scale, scale));
-            source.Freeze();
-        }
+            if (source.Width > MaxDimension || source.Height > MaxDimension)
+            {
+                var scale = Math.Min((double)MaxDimension / source.Width,
+                                     (double)MaxDimension / source.Height);
+                int newW  = (int)(source.Width  * scale);
+                int newH  = (int)(source.Height * scale);
+                scaled    = source.Resize(new SkiaSharp.SKSizeI(newW, newH), SkiaSharp.SKSamplingOptions.Default);
+                if (scaled != null) toEncode = scaled;
+            }
 
-        var encoder = new JpegBitmapEncoder { QualityLevel = 85 };
-        encoder.Frames.Add(BitmapFrame.Create(source));
-        using var output = new System.IO.MemoryStream();
-        encoder.Save(output);
-        return (output.ToArray(), "image/jpeg");
+            using var image = SkiaSharp.SKImage.FromBitmap(toEncode);
+            using var data  = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 85);
+            return (data.ToArray(), "image/jpeg");
+        }
+        finally
+        {
+            scaled?.Dispose();
+        }
     }
 
     // ── Response parsing ──────────────────────────────────────────────────

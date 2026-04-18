@@ -1,6 +1,5 @@
 using System.IO;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using SkiaSharp;
 using WildlifeWatcher.Services.Interfaces;
 
 namespace WildlifeWatcher.Services;
@@ -258,27 +257,43 @@ public class BackgroundModelService : IBackgroundModelService
         TrainingProgressChanged?.Invoke(this, TrainingProgress);
     }
 
+    // SkiaSharp — avoids WPF's BitmapDecoder/BitmapFrame path, which creates a
+    // Dispatcher (and therefore a hidden HWND) on every thread-pool worker that
+    // calls it. Those HWNDs never release, and over hours of background-thread
+    // ticks the process exhausts its 10k USER-handle quota, after which every
+    // call throws Win32Exception (8) "Not enough memory resources".
     private static byte[] ToGrayPixels(byte[] pngBytes, int w, int h)
     {
         if (w <= 0 || h <= 0)
             throw new InvalidOperationException("BackgroundModelService not initialized — call Initialize() first.");
 
-        using var pngStream = new MemoryStream(pngBytes);
-        var source = BitmapFrame.Create(
-            pngStream,
-            BitmapCreateOptions.None,
-            BitmapCacheOption.OnLoad);
+        using var source = SKBitmap.Decode(pngBytes)
+            ?? throw new InvalidOperationException("Failed to decode frame PNG");
 
-        var scaled = new TransformedBitmap(source,
-            new ScaleTransform(
-                (double)w / source.PixelWidth,
-                (double)h / source.PixelHeight));
+        // Normalise + resize into a known Bgra8888 buffer in one pass, so the
+        // luma loop below doesn't need to second-guess Skia's colour layout.
+        var info = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var scaled = new SKBitmap(info);
+        if (!source.ScalePixels(scaled, SKSamplingOptions.Default))
+            throw new InvalidOperationException("Failed to scale frame");
 
-        var gray = new FormatConvertedBitmap(scaled, PixelFormats.Gray8, null, 0);
-        gray.Freeze();
-
-        var pixels = new byte[w * h];
-        gray.CopyPixels(pixels, w, 0);
-        return pixels;
+        // BT.601 luma (integer form): Y = (299·R + 587·G + 114·B) / 1000.
+        // Bgra8888 layout: bytes are B, G, R, A per pixel.
+        var src    = scaled.Bytes;
+        int stride = scaled.RowBytes;
+        var result = new byte[w * h];
+        for (int y = 0, i = 0; y < h; y++)
+        {
+            int row = y * stride;
+            for (int x = 0; x < w; x++, i++)
+            {
+                int p = row + x * 4;
+                byte b = src[p];
+                byte g = src[p + 1];
+                byte r = src[p + 2];
+                result[i] = (byte)((r * 299 + g * 587 + b * 114) / 1000);
+            }
+        }
+        return result;
     }
 }

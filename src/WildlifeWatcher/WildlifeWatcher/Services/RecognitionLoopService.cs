@@ -130,12 +130,21 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
     private async Task RunBackgroundUpdateLoopAsync(CancellationToken ct)
     {
+        // Exponential backoff on repeated failures so a persistent fault (e.g. a
+        // handle leak, disk full, decoder breakage) doesn't spam every 2s.
+        int consecutiveFailures = 0;
+        const int MaxBackoffSeconds = 60;
+
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                var intervalSeconds = _settings.CurrentSettings.BackgroundUpdateIntervalSeconds;
-                await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(intervalSeconds, 1, 30)), ct);
+                int baseDelay = Math.Clamp(_settings.CurrentSettings.BackgroundUpdateIntervalSeconds, 1, 30);
+                int delaySec  = consecutiveFailures == 0
+                    ? baseDelay
+                    : Math.Min(MaxBackoffSeconds, baseDelay * (1 << Math.Min(consecutiveFailures, 5)));
+
+                await Task.Delay(TimeSpan.FromSeconds(delaySec), ct);
                 if (ct.IsCancellationRequested || !_camera.IsConnected) continue;
 
                 try
@@ -145,10 +154,14 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
 
                     EnsureInitialized(frame);
                     _background.UpdateBackground(frame);
+                    consecutiveFailures = 0; // success — reset backoff
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Background update tick failed");
+                    consecutiveFailures++;
+                    // Log the first few, then throttle to every 20th to avoid flooding
+                    if (consecutiveFailures <= 3 || consecutiveFailures % 20 == 0)
+                        _logger.LogWarning(ex, "Background update tick failed (failure #{Count})", consecutiveFailures);
                 }
             }
         }
@@ -168,16 +181,18 @@ public class RecognitionLoopService : IHostedService, IRecognitionLoopService, I
         var settings = _settings.CurrentSettings;
         int cellSize = settings.PoiCellSizePixels;
 
-        // Decode frame dimensions (cheap — just reads header)
+        // Decode frame dimensions (cheap — just reads header via SkiaSharp).
+        // Do NOT use WPF's BitmapDecoder here — on a background thread it
+        // spawns a new Dispatcher + HWND per worker that never gets released,
+        // leaking USER handles until the process can't CreateWindowEx any more.
         int frameW, frameH;
-        using (var ms = new System.IO.MemoryStream(pngFrame))
+        using (var data = SkiaSharp.SKData.CreateCopy(pngFrame))
+        using (var codec = SkiaSharp.SKCodec.Create(data))
         {
-            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
-                ms, System.Windows.Media.Imaging.BitmapCreateOptions.None,
-                System.Windows.Media.Imaging.BitmapCacheOption.None);
-            var frame = decoder.Frames[0];
-            frameW = frame.PixelWidth;
-            frameH = frame.PixelHeight;
+            if (codec == null)
+                throw new InvalidOperationException("Failed to read PNG header");
+            frameW = codec.Info.Width;
+            frameH = codec.Info.Height;
         }
 
         if (frameW == _cameraWidth && frameH == _cameraHeight && cellSize == _lastCellSize)
