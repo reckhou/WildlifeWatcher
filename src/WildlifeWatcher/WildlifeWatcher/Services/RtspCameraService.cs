@@ -19,6 +19,15 @@ public class RtspCameraService : ICameraService
     private string? _currentFilePath;
     private volatile bool _suppressEvents; // true while restarting a file loop
 
+    // Watchdog for stuck VLC state (e.g. WASAPI AUDCLNT_E_DEVICE_INVALIDATED → buffer deadlock).
+    // After ~15s of consecutive snapshot failures we force a playback restart to unwedge
+    // the native player and release the HWND the WPF VideoView shares with it.
+    private int _consecutiveSnapshotFailures;
+    private const int MaxConsecutiveSnapshotFailures = 6;
+    private DateTime _lastRestartAtUtc = DateTime.MinValue;
+    private static readonly TimeSpan MinRestartInterval = TimeSpan.FromSeconds(30);
+    private int _isRestarting; // 0/1 via Interlocked
+
     public bool IsConnected { get; private set; }
     public MediaPlayer MediaPlayer => _mediaPlayer;
     public event EventHandler<bool>? ConnectionStateChanged;
@@ -173,16 +182,24 @@ public class RtspCameraService : ICameraService
             if (await Task.WhenAny(snapshotTask, Task.Delay(5_000)) != snapshotTask)
             {
                 _logger.LogWarning("Frame extraction timed out — camera may have disconnected");
+                TriggerWatchdog();
                 return null;
             }
 
             var success = await snapshotTask;
-            if (!success || !File.Exists(tempFile)) return null;
+            if (!success || !File.Exists(tempFile))
+            {
+                TriggerWatchdog();
+                return null;
+            }
+
+            Interlocked.Exchange(ref _consecutiveSnapshotFailures, 0);
             return await File.ReadAllBytesAsync(tempFile);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to extract frame");
+            TriggerWatchdog();
             return null;
         }
         finally
@@ -190,6 +207,66 @@ public class RtspCameraService : ICameraService
             if (File.Exists(tempFile))
                 File.Delete(tempFile);
         }
+    }
+
+    /// <summary>
+    /// Increment the snapshot-failure counter. When VLC has been unable to produce a
+    /// frame for long enough to indicate a wedged internal state (e.g. WASAPI audio
+    /// device invalidated → buffer deadlock), force a playback restart on a background
+    /// thread. Debounced so repeated attempts don't spin faster than one every 30 s.
+    /// </summary>
+    private void TriggerWatchdog()
+    {
+        var failures = Interlocked.Increment(ref _consecutiveSnapshotFailures);
+        if (failures < MaxConsecutiveSnapshotFailures) return;
+        if (_isFileMode) return; // file playback: EndReached handles re-play
+        if (DateTime.UtcNow - _lastRestartAtUtc < MinRestartInterval) return;
+        if (Interlocked.CompareExchange(ref _isRestarting, 1, 0) != 0) return;
+
+        _lastRestartAtUtc = DateTime.UtcNow;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                _logger.LogWarning(
+                    "VLC appears stuck ({Count} consecutive snapshot failures) — restarting playback to recover",
+                    failures);
+                await RestartPlaybackAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to restart VLC playback");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _consecutiveSnapshotFailures, 0);
+                Interlocked.Exchange(ref _isRestarting, 0);
+            }
+        });
+    }
+
+    private async Task RestartPlaybackAsync()
+    {
+        // Stop on a background thread with a timeout — if VLC is deadlocked, the
+        // native Stop() can block indefinitely waiting for the render thread.
+        var stopTask = Task.Run(() =>
+        {
+            try { _mediaPlayer.Stop(); } catch { /* best effort */ }
+        });
+        if (await Task.WhenAny(stopTask, Task.Delay(3_000)) != stopTask)
+            _logger.LogWarning("VLC Stop() did not return within 3s — proceeding with Play() anyway");
+
+        if (_disposed) return;
+
+        // Brief pause so VLC can release its audio/render clients before we queue new media.
+        await Task.Delay(500);
+        if (_disposed) return;
+
+        var url = BuildUrl();
+        _logger.LogInformation("Restarting VLC playback → {Url}", MaskCredentials(url));
+        var media = new Media(_libVlc, url, FromType.FromLocation);
+        _mediaPlayer.Media = media;
+        _mediaPlayer.Play();
     }
 
     private void OnLibVlcLog(object? sender, LogEventArgs e)
